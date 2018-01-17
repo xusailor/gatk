@@ -67,7 +67,7 @@ public abstract class StrandBiasTest extends InfoFieldAnnotation {
         boolean foundData = false;
 
         for( final Genotype g : genotypes ) {
-            if( g.isNoCall() || ! g.hasAnyAttribute(GATKVCFConstants.STRAND_BIAS_BY_SAMPLE_KEY) ) {
+            if( ! g.hasAnyAttribute(GATKVCFConstants.STRAND_BIAS_BY_SAMPLE_KEY) ) {
                 continue;
             }
 
