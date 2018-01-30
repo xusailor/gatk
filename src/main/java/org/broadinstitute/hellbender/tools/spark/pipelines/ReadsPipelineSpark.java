@@ -18,6 +18,7 @@ import org.broadinstitute.hellbender.engine.filters.ReadFilter;
 import org.broadinstitute.hellbender.engine.spark.AddContextDataToReadSpark;
 import org.broadinstitute.hellbender.engine.spark.GATKSparkTool;
 import org.broadinstitute.hellbender.engine.spark.JoinStrategy;
+import org.broadinstitute.hellbender.engine.spark.SequenceDictionaryValidationArgumentCollection;
 import org.broadinstitute.hellbender.engine.spark.datasources.VariantsSparkSource;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.ApplyBQSRUniqueArgumentCollection;
@@ -139,6 +140,14 @@ public class ReadsPipelineSpark extends GATKSparkTool {
     @Override
     public SerializableFunction<GATKRead, SimpleInterval> getReferenceWindowFunction() {
         return BaseRecalibrationEngine.BQSR_REFERENCE_WINDOW_FUNCTION;
+    }
+
+    @Override
+    protected void validateSequenceDictionaries(){
+        //don't validate unaligned reads because we don't require them to have a sequence dictionary
+        if( !align ){
+            super.validateSequenceDictionaries();
+        }
     }
 
     @Override

@@ -33,7 +33,6 @@ public final class BwaAndMarkDuplicatesPipelineSparkIntegrationTest extends Comm
         args.addReference(ref);
         args.addInput(input);
         args.addOutput(output);
-        args.addBooleanArgument(StandardArgumentDefinitions.DISABLE_SEQUENCE_DICT_VALIDATION_NAME, true);
         this.runCommandLine(args.getArgsArray());
 
         SamAssertionUtils.assertSamsEqual(output, expectedSam);
