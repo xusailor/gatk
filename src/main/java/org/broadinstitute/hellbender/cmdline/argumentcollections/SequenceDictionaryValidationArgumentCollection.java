@@ -1,4 +1,4 @@
-package org.broadinstitute.hellbender.engine.spark;
+package org.broadinstitute.hellbender.cmdline.argumentcollections;
 
 import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;

@@ -1,9 +1,10 @@
-package org.broadinstitute.hellbender.engine.spark;
+package org.broadinstitute.hellbender.cmdline.argumentcollections;
 
 import org.broadinstitute.barclay.argparser.ArgumentCollection;
 import org.broadinstitute.barclay.argparser.CommandLineArgumentParser;
 import org.broadinstitute.barclay.argparser.CommandLineParser;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
+import org.broadinstitute.hellbender.cmdline.argumentcollections.SequenceDictionaryValidationArgumentCollection;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
