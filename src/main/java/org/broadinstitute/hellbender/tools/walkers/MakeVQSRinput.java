@@ -7,8 +7,9 @@ import htsjdk.variant.vcf.*;
 import org.broadinstitute.barclay.argparser.*;
 import org.broadinstitute.barclay.help.DocumentedFeature;
 import org.broadinstitute.hellbender.cmdline.*;
+import org.broadinstitute.hellbender.cmdline.GATKPlugin.DefaultGATKVariantAnnotationArgumentCollection;
+import org.broadinstitute.hellbender.cmdline.GATKPlugin.GATKAnnotationArgumentCollection;
 import org.broadinstitute.hellbender.cmdline.argumentcollections.DbsnpArgumentCollection;
-import org.broadinstitute.hellbender.cmdline.argumentcollections.VariantAnnotationArgumentCollection;
 import org.broadinstitute.hellbender.cmdline.programgroups.ShortVariantDiscoveryProgramGroup;
 import org.broadinstitute.hellbender.engine.*;
 import org.broadinstitute.hellbender.tools.walkers.annotator.*;
@@ -99,10 +100,30 @@ public final class MakeVQSRinput extends VariantWalker {
     private GenotypeCalculationArgumentCollection genotypeArgs = new GenotypeCalculationArgumentCollection();
 
     @ArgumentCollection
-    private final VariantAnnotationArgumentCollection variantAnnotationArgumentCollection = new VariantAnnotationArgumentCollection(
+    private final GATKAnnotationArgumentCollection variantAnnotationArgumentCollection = new DefaultGATKVariantAnnotationArgumentCollection(
             Arrays.asList(StandardAnnotation.class.getSimpleName()),
             Collections.emptyList(),
-            Collections.emptyList());
+            Collections.emptyList()) {
+        @Override
+        public List<String> getUserEnabledAnnotationNames() {
+            return null;
+        }
+
+        @Override
+        public List<String> getUserEnabledAnnotationGroups() {
+            return null;
+        }
+
+        @Override
+        public List<String> getUserDisabledAnnotationNames() {
+            return null;
+        }
+
+        @Override
+        public boolean getDisableToolDefaultAnnotations() {
+            return false;
+        }
+    };
 
     /**
      * This option can only be activated if intervals are specified.
