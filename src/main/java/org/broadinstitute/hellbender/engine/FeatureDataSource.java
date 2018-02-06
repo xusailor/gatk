@@ -375,13 +375,14 @@ public final class FeatureDataSource<T extends Feature> implements GATKDataSourc
         }
 
         try {
+            //TODO: take out this terrible hack once Karthik exposes the query json
             return new GenomicsDBFeatureReader<>(vidmapJson.getAbsolutePath(),
                                                  callsetJson.getAbsolutePath(),
                                                  workspace.getAbsolutePath(),
                                                  GenomicsDBConstants.DEFAULT_ARRAY_NAME,
                                                  reference.getAbsolutePath(),
                                                  vcfHeader.getAbsolutePath(),
-                                                 new BCF2Codec());
+                                                 new BCF2Codec(), true);
         } catch (final IOException e) {
             throw new UserException("Couldn't create GenomicsDBFeatureReader", e);
         }

@@ -103,27 +103,7 @@ public final class MakeVQSRinput extends VariantWalker {
     private final GATKAnnotationArgumentCollection variantAnnotationArgumentCollection = new DefaultGATKVariantAnnotationArgumentCollection(
             Arrays.asList(StandardAnnotation.class.getSimpleName()),
             Collections.emptyList(),
-            Collections.emptyList()) {
-        @Override
-        public List<String> getUserEnabledAnnotationNames() {
-            return null;
-        }
-
-        @Override
-        public List<String> getUserEnabledAnnotationGroups() {
-            return null;
-        }
-
-        @Override
-        public List<String> getUserDisabledAnnotationNames() {
-            return null;
-        }
-
-        @Override
-        public boolean getDisableToolDefaultAnnotations() {
-            return false;
-        }
-    };
+            Collections.emptyList());
 
     /**
      * This option can only be activated if intervals are specified.
@@ -216,7 +196,8 @@ public final class MakeVQSRinput extends VariantWalker {
             return;
         }
 
-        ArrayList<Genotype> calledGenotypes = new ArrayList<>();
+        //TODO:take out the engine hack (in FeatureDataSource) that replaced this
+        /*ArrayList<Genotype> calledGenotypes = new ArrayList<>();
         for(final Genotype g : mergedVC.getGenotypes()) {
             final GenotypeBuilder gbuilder = new GenotypeBuilder(g);
             if (g.hasLikelihoods()) {
@@ -224,14 +205,14 @@ public final class MakeVQSRinput extends VariantWalker {
                 calledGenotypes.add(gbuilder.make());
             }
 
-        }
+        }*/
 
         //Add in annotations
         final VariantContext reannotated = annotationEngine.annotateContext(mergedVC, features, ref, null, a -> true);
         VariantContextBuilder builder = new VariantContextBuilder(RMSMappingQuality.getInstance().finalizeRawMQ(reannotated));
-        builder.genotypes(calledGenotypes);
+        //builder.genotypes(calledGenotypes);
 
-
+        //TODO: make this a OneShotLogger because it's annoying
         if (!reannotated.hasAttribute(GATKVCFConstants.RAW_QUAL_APPROX_KEY))
             logger.warn("Variant is missing the QUALapprox key -- if this tool was run with GenomicsDB input, check the vidmap.json annotation info");
         final double QUALapprox = reannotated.getAttributeAsDouble(GATKVCFConstants.RAW_QUAL_APPROX_KEY, 0.0);
