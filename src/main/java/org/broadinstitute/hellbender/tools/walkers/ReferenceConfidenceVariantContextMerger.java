@@ -438,7 +438,7 @@ public final class ReferenceConfidenceVariantContextMerger {
                 name = g.getSampleName();
             }
             final int ploidy = g.getPloidy();
-            final GenotypeBuilder genotypeBuilder = new GenotypeBuilder(g).alleles(GATKVariantContextUtils.noCallAlleles(g.getPloidy()));
+            final GenotypeBuilder genotypeBuilder = new GenotypeBuilder(g);
             genotypeBuilder.name(name);
             if (g.hasPL()) {
                 // lazy initialization of the genotype index map by ploidy.
