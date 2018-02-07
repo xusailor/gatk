@@ -191,6 +191,7 @@ public final class MakeVQSRinput extends VariantWalker {
     @Override
     public void apply(VariantContext variant, ReadsContext reads, ReferenceContext ref, FeatureContext features) {
         ref.setWindow(10, 10); //TODO this matches the gatk3 behavior but may be unnecessary
+        //I think I just do this to get rid of the NON_REF
         final VariantContext mergedVC = merger.merge(Collections.singletonList(variant), variant, includeNonVariants ? ref.getBase() : null, true, false);
         if ( !mergedVC.isVariant() || !GenotypeGVCFs.isProperlyPolymorphic(mergedVC) || mergedVC.getAttributeAsInt(VCFConstants.DEPTH_KEY,0) == 0) {
             return;
@@ -222,7 +223,7 @@ public final class MakeVQSRinput extends VariantWalker {
 
         double QD = QUALapprox / (double)variantDP;
 
-        builder.attribute(GATKVCFConstants.QUAL_BY_DEPTH_KEY, QD);
+        builder.attribute(GATKVCFConstants.QUAL_BY_DEPTH_KEY, QD).log10PError(QUALapprox/-10.0);
 
         VariantContext result = builder.make();
 
