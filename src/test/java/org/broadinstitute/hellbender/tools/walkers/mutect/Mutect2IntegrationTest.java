@@ -66,6 +66,7 @@ public class Mutect2IntegrationTest extends CommandLineProgramTest {
         Utils.resetRandomGenerator();
         final File unfilteredVcf = createTempFile("unfiltered", ".vcf");
         final File filteredVcf = createTempFile("filtered", ".vcf");
+        final File alignmentFilteredVcf = createTempFile("alignment-filtered", ".vcf");
 
         final File tumorNameFile = createTempFile("tumor_name", ".txt");
         final File normalNameFile = createTempFile("normal_name", ".txt");
@@ -98,6 +99,9 @@ public class Mutect2IntegrationTest extends CommandLineProgramTest {
 
         // run FilterMutectCalls
         new Main().instanceMain(makeCommandLineArgs(Arrays.asList("-V", unfilteredVcf.getAbsolutePath(), "-O", filteredVcf.getAbsolutePath()), FilterMutectCalls.class.getSimpleName()));
+
+        // run FilterAlignmentArtifacts
+        new Main().instanceMain(makeCommandLineArgs(Arrays.asList("-I", tumorBam.getAbsolutePath(), "-V", filteredVcf.getAbsolutePath(), "-O", alignmentFilteredVcf.getAbsolutePath(), "-index", "/Users/davidben/Desktop/bwa_mem_hg_38/Homo_sapiens_assembly38.index_bundle"), "FilterAlignmentArtifacts"));
 
         // verify that alleles contained in likelihoods matrix but dropped from somatic calls do not show up in annotations
         // also check that alleles have been properly clipped after dropping any non-called alleles, i.e. if we had AAA AA A

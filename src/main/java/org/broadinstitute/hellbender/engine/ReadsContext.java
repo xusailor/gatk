@@ -2,11 +2,12 @@ package org.broadinstitute.hellbender.engine;
 
 import org.broadinstitute.hellbender.engine.filters.ReadFilter;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
+import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.iterators.ReadFilteringIterator;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
 
-import java.util.Collections;
-import java.util.Iterator;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Wrapper around ReadsDataSource that presents reads overlapping a specific interval to a client,
@@ -98,5 +99,36 @@ public final class ReadsContext implements Iterable<GATKRead> {
         return readFilter == null ?
                 dataSource.query(interval) :
                 new ReadFilteringIterator(dataSource.query(interval), readFilter);
+    }
+
+    /**
+     * Create a map of reads overlapping {@code interval} to their mates by looking for all possible mates within some
+     * maximum fragment size.  This is not guaranteed to find all mates, in particular near structural variant breakpoints
+     * where mates may align far away.
+     *
+     * The algorithm is:
+     * 1) make two maps of read name --> read for reads overlapping {@code interval}, one for first-of-pair reads and one
+     *    for second-of-pair reads.
+     * 2) For all reads in an expanded interval padded by {@code fragmentSize} on both sides look for a read of the same
+     *    that is second-of-pair if this read is first-of-pair or vice-versa.  If such a read is found then this is that read's mate.
+     *
+     * @param fragmentSize the maximum distance on either side of {@code interval} to look for mates.
+     * @return a map of reads ot their mates for all reads for which a mate could be found.
+     */
+    public Map<GATKRead, GATKRead> getReadToMateMap(final int fragmentSize) {
+        final Map<String, GATKRead> readOnes = new HashMap<>();
+        final Map<String, GATKRead> readTwos = new HashMap<>();
+        Utils.stream(dataSource.query(interval)).forEach(read -> (read.isFirstOfPair() ? readOnes : readTwos).put(read.getName(), read));
+
+        final Map<GATKRead, GATKRead> result = new HashMap<>();
+        final SimpleInterval expandedInterval = new SimpleInterval(interval.getContig(), Math.max(1, interval.getStart() - fragmentSize), interval.getEnd() + fragmentSize);
+        Utils.stream(dataSource.query(expandedInterval)).forEach(mate -> {
+            final GATKRead read = (mate.isFirstOfPair() ? readTwos : readOnes).get(mate.getName());
+            if (read != null) {
+                result.put(read, mate);
+            }
+        });
+
+        return result;
     }
 }
