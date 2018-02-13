@@ -28,6 +28,7 @@ public abstract class VariantWalker extends VariantWalkerBase {
     //we do add the driving source to the Feature manager but we do need to treat it differently and thus this field.
     private FeatureDataSource<VariantContext> drivingVariants;
     private FeatureInput<VariantContext> drivingVariantsFeatureInput;
+    private boolean callGTs = false;
 
     @Override
     protected SAMSequenceDictionary getSequenceDictionaryForDrivingVariants() { return drivingVariants.getSequenceDictionary(); }
@@ -52,7 +53,7 @@ public abstract class VariantWalker extends VariantWalkerBase {
 
         //This is the data source for the driving source of variants, which uses a cache lookahead of FEATURE_CACHE_LOOKAHEAD
         drivingVariants = new FeatureDataSource<>(drivingVariantsFeatureInput, FEATURE_CACHE_LOOKAHEAD, VariantContext.class, cloudPrefetchBuffer, cloudIndexPrefetchBuffer,
-                                                  referenceArguments.getReferencePath());
+                                                  referenceArguments.getReferencePath(), doGenotypeCalling());
 
         //Add the driving datasource to the feature manager too so that it can be queried. Setting lookahead to 0 to avoid caching.
         //Note: we are disabling lookahead here because of windowed queries that need to "look behind" as well.
@@ -96,5 +97,9 @@ public abstract class VariantWalker extends VariantWalkerBase {
 
         if ( drivingVariants != null )
             drivingVariants.close();
+    }
+
+    protected boolean doGenotypeCalling() {
+        return callGTs;
     }
 }

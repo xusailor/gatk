@@ -8,7 +8,7 @@ public final class GenomicsDBConstants {
     public static final String DEFAULT_VIDMAP_FILE_NAME = "vidmap.json";
     public static final String DEFAULT_CALLSETMAP_FILE_NAME = "callset.json";
     public static final String DEFAULT_VCFHEADER_FILE_NAME = "vcfheader.vcf";
-
+    public static final String DEFAULT_QUERY_JSON_FILE_NAME = "query.json";
 
     /**
      * Don't instantiate a utility class

@@ -20,6 +20,7 @@ import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.genotyper.IndexedSampleList;
 import org.broadinstitute.hellbender.utils.genotyper.SampleList;
+import org.broadinstitute.hellbender.utils.logging.OneShotLogger;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFHeaderLines;
 import org.broadinstitute.hellbender.utils.variant.GATKVariantContextUtils;
@@ -83,10 +84,11 @@ import java.util.*;
         programGroup = ShortVariantDiscoveryProgramGroup.class)
 @DocumentedFeature
 public final class MakeVQSRinput extends VariantWalker {
-
+    protected final OneShotLogger warning = new OneShotLogger(this.getClass());
     public static final String PHASED_HOM_VAR_STRING = "1|1";
     public static final String ONLY_OUTPUT_CALLS_STARTING_IN_INTERVALS_FULL_NAME = "onlyOutputCallsStartingInIntervals";
     private static final String GVCF_BLOCK = "GVCFBlock";
+    private final boolean doGenotypeCalling = true;
 
     @Argument(fullName = StandardArgumentDefinitions.OUTPUT_LONG_NAME, shortName = StandardArgumentDefinitions.OUTPUT_SHORT_NAME,
             doc="File to which variants should be written", optional=false)
@@ -135,6 +137,11 @@ public final class MakeVQSRinput extends VariantWalker {
 
     @Override
     public boolean requiresReference() {
+        return true;
+    }
+
+    @Override
+    protected boolean doGenotypeCalling() {
         return true;
     }
 
@@ -191,7 +198,7 @@ public final class MakeVQSRinput extends VariantWalker {
     @Override
     public void apply(VariantContext variant, ReadsContext reads, ReferenceContext ref, FeatureContext features) {
         ref.setWindow(10, 10); //TODO this matches the gatk3 behavior but may be unnecessary
-        //I think I just do this to get rid of the NON_REF
+        //do this to get rid of the NON_REF and update the genotypes
         final VariantContext mergedVC = merger.merge(Collections.singletonList(variant), variant, includeNonVariants ? ref.getBase() : null, true, false);
         if ( !mergedVC.isVariant() || !GenotypeGVCFs.isProperlyPolymorphic(mergedVC) || mergedVC.getAttributeAsInt(VCFConstants.DEPTH_KEY,0) == 0) {
             return;
@@ -213,9 +220,8 @@ public final class MakeVQSRinput extends VariantWalker {
         VariantContextBuilder builder = new VariantContextBuilder(RMSMappingQuality.getInstance().finalizeRawMQ(reannotated));
         //builder.genotypes(calledGenotypes);
 
-        //TODO: make this a OneShotLogger because it's annoying
         if (!reannotated.hasAttribute(GATKVCFConstants.RAW_QUAL_APPROX_KEY))
-            logger.warn("Variant is missing the QUALapprox key -- if this tool was run with GenomicsDB input, check the vidmap.json annotation info");
+            warning.warn("Variant is missing the QUALapprox key -- if this tool was run with GenomicsDB input, check the vidmap.json annotation info");
         final double QUALapprox = reannotated.getAttributeAsDouble(GATKVCFConstants.RAW_QUAL_APPROX_KEY, 0.0);
         if(QUALapprox < genotypeArgs.STANDARD_CONFIDENCE_FOR_CALLING - 10*Math.log10(genotypeArgs.snpHeterozygosity))  //we don't apply the prior to the QUAL approx, so do it here
             return;
