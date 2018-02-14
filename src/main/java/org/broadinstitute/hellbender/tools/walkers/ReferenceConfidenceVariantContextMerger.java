@@ -8,7 +8,6 @@ import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.walkers.annotator.VariantAnnotatorEngine;
 import org.broadinstitute.hellbender.tools.walkers.annotator.allelespecific.AlleleSpecificAnnotationData;
 import org.broadinstitute.hellbender.tools.walkers.annotator.allelespecific.ReducibleAnnotationData;
-import org.broadinstitute.hellbender.tools.walkers.genotyper.GenotypeAssignmentMethod;
 import org.broadinstitute.hellbender.tools.walkers.genotyper.GenotypeLikelihoodCalculator;
 import org.broadinstitute.hellbender.tools.walkers.genotyper.GenotypeLikelihoodCalculators;
 import org.broadinstitute.hellbender.utils.Utils;
@@ -439,7 +438,7 @@ public final class ReferenceConfidenceVariantContextMerger {
                 name = g.getSampleName();
             }
             final int ploidy = g.getPloidy();
-            final GenotypeBuilder genotypeBuilder = new GenotypeBuilder(g);
+            final GenotypeBuilder genotypeBuilder = new GenotypeBuilder(g).alleles(GATKVariantContextUtils.noCallAlleles(g.getPloidy()));
             genotypeBuilder.name(name);
             if (g.hasPL()) {
                 // lazy initialization of the genotype index map by ploidy.
@@ -450,7 +449,6 @@ public final class ReferenceConfidenceVariantContextMerger {
                 final int[] PLs = generatePL(g, genotypeIndexMapByPloidy);
                 final int[] AD = g.hasAD() ? generateAD(g.getAD(), perSampleIndexesOfRelevantAlleles) : null;
                 genotypeBuilder.PL(PLs).AD(AD);
-                GATKVariantContextUtils.makeGenotypeCall(maximumPloidy, genotypeBuilder, GenotypeAssignmentMethod.USE_PLS_TO_ASSIGN, GenotypeLikelihoods.fromPLs(PLs).getAsVector(), remappedAlleles);
             }
             mergedGenotypes.add(genotypeBuilder.make());
         }

@@ -12,6 +12,7 @@ import org.broadinstitute.hellbender.cmdline.GATKPlugin.GATKAnnotationArgumentCo
 import org.broadinstitute.hellbender.cmdline.argumentcollections.DbsnpArgumentCollection;
 import org.broadinstitute.hellbender.cmdline.programgroups.ShortVariantDiscoveryProgramGroup;
 import org.broadinstitute.hellbender.engine.*;
+import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.walkers.annotator.*;
 import org.broadinstitute.hellbender.tools.walkers.annotator.allelespecific.AS_RMSMappingQuality;
 import org.broadinstitute.hellbender.tools.walkers.genotyper.*;
@@ -28,20 +29,23 @@ import picard.cmdline.programgroups.VariantFilteringProgramGroup;
 
 import java.io.File;
 import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import static org.broadinstitute.hellbender.tools.walkers.ReferenceConfidenceVariantContextMerger.generateAD;
+import static org.broadinstitute.hellbender.tools.walkers.ReferenceConfidenceVariantContextMerger.generatePL;
 
 /**
- * Perform joint genotyping on one or more samples pre-called with HaplotypeCaller
+ * Perform "quick and dirty" joint genotyping on one or more samples pre-called with HaplotypeCaller
  *
  * <p>
  * This tool is designed to perform joint genotyping on multiple samples pre-called with HaplotypeCaller to produce a
- * multi-sample callset in a highly scalable manner. However it can also be run on a single sample at a time to produce
- * a single-sample callset. In any case, the input samples must possess genotype likelihoods produced by HaplotypeCaller
+ * multi-sample callset in a super extra highly scalable manner. In any case, the input samples must possess genotype likelihoods produced by HaplotypeCaller
  * with `-ERC GVCF` or `-ERC BP_RESOLUTION`.
  *
  * <h3>Input</h3>
  * <p>
- * One or more GVCFs produced by in HaplotypeCaller with the `-ERC GVCF` or `-ERC BP_RESOLUTION` settings, containing
- * the samples to joint-genotype.
+ * A GenomicsDB containing the samples to joint-genotype.
  * </p>
  *
  * <h3>Output</h3>
@@ -51,52 +55,42 @@ import java.util.*;
  *
  * <h3>Usage example</h3>
  *
- * <h4>Perform joint genotyping on a set of GVCFs enumerated in the command line</h4>
+ * <h4>Perform joint genotyping on a set of GVCFs stored in a GenomicsDB</h4>
  * <pre>
- * gatk-launch --javaOptions "-Xmx4g" GenotypeGVCFs \
+ * gatk-launch --javaOptions "-Xmx4g" MakeVQSRinput \
  *   -R reference.fasta \
- *   -V input1.g.vcf \
- *   -V input2.g.vcf \
- *   -V input3.g.vcf \
+ *   -V gendb://genomicsdb \
  *   -O output.vcf
  * </pre>
  *
- * <h4>Perform joint genotyping on a set of GVCFs listed in a text file, one per line</h4>
- * <pre>
- * gatk-launch --javaOptions "-Xmx4g" GenotypeGVCFs \
- *   -R reference.fasta \
- *   -V input_gvcfs.list \
- *   -O output.vcf
- * </pre>
- *
- * <h3>Caveat</h3>
- * <p>Only GVCF files produced by HaplotypeCaller (or CombineGVCFs) can be used as input for this tool. Some other
- * programs produce files that they call GVCFs but those lack some important information (accurate genotype likelihoods
- * for every position) that GenotypeGVCFs requires for its operation.</p>
+ * <h3>Caveats</h3>
+ * <p><ul><li>Only GenomicsDB instances can be used as input for this tool.</li>
+ * <li>To generate all the annotations necessary for VQSR, input variants must include the QUALapprox, VarDP and MQ_DP
+ * annotations and GenomicsDB must have a combination operation specified for them in the vidmap.json file</li>
+ * </ul></p>
  *
  * <h3>Special note on ploidy</h3>
- * <p>This tool is able to handle any ploidy (or mix of ploidies) intelligently; there is no need to specify ploidy
- * for non-diploid organisms.</p>
+ * <p>This tool assumes all diploid genotypes.</p>
  *
  */
-@CommandLineProgramProperties(summary = "Perform joint genotyping on one or more samples pre-called with HaplotypeCaller",
-        oneLineSummary = "Perform joint genotyping on one or more samples pre-called with HaplotypeCaller",
+@CommandLineProgramProperties(summary = "Perform \"quick and dirty\" joint genotyping on one or more samples pre-called with HaplotypeCaller",
+        oneLineSummary = "Perform \"quick and dirty\" joint genotyping on one or more samples pre-called with HaplotypeCaller",
         programGroup = ShortVariantDiscoveryProgramGroup.class)
 @DocumentedFeature
 public final class MakeVQSRinput extends VariantWalker {
     protected final OneShotLogger warning = new OneShotLogger(this.getClass());
-    public static final String PHASED_HOM_VAR_STRING = "1|1";
     public static final String ONLY_OUTPUT_CALLS_STARTING_IN_INTERVALS_FULL_NAME = "onlyOutputCallsStartingInIntervals";
     private static final String GVCF_BLOCK = "GVCFBlock";
-    private final boolean doGenotypeCalling = true;
+    private final RMSMappingQuality MQcalculator = RMSMappingQuality.getInstance();
+
+    private static final int PIPELINE_MAX_ALT_COUNT = 6;
+    // cache the ploidy 2 PL array sizes for increasing numbers of alts up to the maximum of PIPELINE_MAX_ALT_COUNT
+    final int[] likelihoodSizeCache = new int[PIPELINE_MAX_ALT_COUNT + 1];
+
 
     @Argument(fullName = StandardArgumentDefinitions.OUTPUT_LONG_NAME, shortName = StandardArgumentDefinitions.OUTPUT_SHORT_NAME,
             doc="File to which variants should be written", optional=false)
     private File outputFile;
-
-    //@Argument(fullName="includeNonVariantSites", shortName="allSites", doc="Include loci found to be non-variant after genotyping", optional=true)
-    //TODO This option is currently not supported.
-    private boolean includeNonVariants = false;
 
     @ArgumentCollection
     private GenotypeCalculationArgumentCollection genotypeArgs = new GenotypeCalculationArgumentCollection();
@@ -141,9 +135,7 @@ public final class MakeVQSRinput extends VariantWalker {
     }
 
     @Override
-    protected boolean doGenotypeCalling() {
-        return true;
-    }
+    protected boolean doGenotypeCalling() { return true; }
 
     @Override
     public void onTraversalStart() {
@@ -161,13 +153,12 @@ public final class MakeVQSRinput extends VariantWalker {
 
         annotationEngine = VariantAnnotatorEngine.ofSelectedMinusExcluded(variantAnnotationArgumentCollection, dbsnp.dbsnp, Collections.emptyList());
 
-        merger = new ReferenceConfidenceVariantContextMerger(annotationEngine);
-
         setupVCFWriter(inputVCFHeader, samples);
-    }
 
-    private static boolean annotationShouldBeSkippedForHomRefSites(VariantAnnotation annotation) {
-        return annotation instanceof RankSumTest || annotation instanceof RMSMappingQuality || annotation instanceof AS_RMSMappingQuality;
+        //initialize PL size cache -- HTSJDK cache only goes up to 4 alts, but I need 6
+        for(final int numAlleles : IntStream.rangeClosed(1, PIPELINE_MAX_ALT_COUNT + 1).boxed().collect(Collectors.toList())) {
+            likelihoodSizeCache[numAlleles] = GenotypeLikelihoods.numLikelihoods(numAlleles, GATKVariantContextUtils.DEFAULT_PLOIDY);
+        }
     }
 
     private void setupVCFWriter(VCFHeader inputVCFHeader, SampleList samples) {
@@ -197,138 +188,95 @@ public final class MakeVQSRinput extends VariantWalker {
 
     @Override
     public void apply(VariantContext variant, ReadsContext reads, ReferenceContext ref, FeatureContext features) {
-        ref.setWindow(10, 10); //TODO this matches the gatk3 behavior but may be unnecessary
-        //do this to get rid of the NON_REF and update the genotypes
-        final VariantContext mergedVC = merger.merge(Collections.singletonList(variant), variant, includeNonVariants ? ref.getBase() : null, true, false);
-        if ( !mergedVC.isVariant() || !GenotypeGVCFs.isProperlyPolymorphic(mergedVC) || mergedVC.getAttributeAsInt(VCFConstants.DEPTH_KEY,0) == 0) {
+        //return early if there's no non-symbolic ALT since GDB already did the merging
+        if ( !variant.isVariant() || !GenotypeGVCFs.isProperlyPolymorphic(variant) || variant.getAttributeAsInt(VCFConstants.DEPTH_KEY,0) == 0) {
             return;
         }
 
-        //TODO:take out the engine hack (in FeatureDataSource) that replaced this
-        /*ArrayList<Genotype> calledGenotypes = new ArrayList<>();
-        for(final Genotype g : mergedVC.getGenotypes()) {
-            final GenotypeBuilder gbuilder = new GenotypeBuilder(g);
-            if (g.hasLikelihoods()) {
-                GATKVariantContextUtils.makeGenotypeCall(g.getPloidy(), gbuilder, GenotypeAssignmentMethod.USE_PLS_TO_ASSIGN, g.getLikelihoods().getAsVector(), mergedVC.getAlleles());
-                calledGenotypes.add(gbuilder.make());
-            }
-
-        }*/
-
-        //Add in annotations
-        final VariantContext reannotated = annotationEngine.annotateContext(mergedVC, features, ref, null, a -> true);
-        VariantContextBuilder builder = new VariantContextBuilder(RMSMappingQuality.getInstance().finalizeRawMQ(reannotated));
-        //builder.genotypes(calledGenotypes);
-
-        if (!reannotated.hasAttribute(GATKVCFConstants.RAW_QUAL_APPROX_KEY))
+        //return early if variant doesn't meet QUAL threshold
+        if (!variant.hasAttribute(GATKVCFConstants.RAW_QUAL_APPROX_KEY))
             warning.warn("Variant is missing the QUALapprox key -- if this tool was run with GenomicsDB input, check the vidmap.json annotation info");
-        final double QUALapprox = reannotated.getAttributeAsDouble(GATKVCFConstants.RAW_QUAL_APPROX_KEY, 0.0);
+        final double QUALapprox = variant.getAttributeAsDouble(GATKVCFConstants.RAW_QUAL_APPROX_KEY, 0.0);
         if(QUALapprox < genotypeArgs.STANDARD_CONFIDENCE_FOR_CALLING - 10*Math.log10(genotypeArgs.snpHeterozygosity))  //we don't apply the prior to the QUAL approx, so do it here
             return;
-        final int variantDP = reannotated.getAttributeAsInt(GATKVCFConstants.VARIANT_DEPTH_KEY, 0);
 
+        //GenomicsDB merged all the annotations, but we still need to finalize MQ and QD annotations
+        VariantContextBuilder builder = new VariantContextBuilder(MQcalculator.finalizeRawMQ(variant));
+
+        final int variantDP = variant.getAttributeAsInt(GATKVCFConstants.VARIANT_DEPTH_KEY, 0);
         double QD = QUALapprox / (double)variantDP;
-
         builder.attribute(GATKVCFConstants.QUAL_BY_DEPTH_KEY, QD).log10PError(QUALapprox/-10.0);
+
+        //remove the NON_REF allele and update genotypes
+        if (variant.getAlleles().contains(Allele.NON_REF_ALLELE)) { //I don't know why, but sometimes GDB returns a context without a NON_REF
+            final GenotypesContext calledGenotypes = removeNonRefAllele(variant);
+            builder.genotypes(calledGenotypes);
+            builder.alleles(variant.getAlleles().subList(0, variant.getAlleles().size() - 1));
+        }
 
         VariantContext result = builder.make();
 
         SimpleInterval variantStart = new SimpleInterval(result.getContig(), result.getStart(), result.getStart());
         if (!onlyOutputCallsStartingInIntervals || intervals.stream().anyMatch(interval -> interval.contains(variantStart))) {
             vcfWriter.add(result);
+            //TODO: once we're loading GTs into hail from GDB we won't need to output them here
             //vcfWriter.add(new VariantContextBuilder(combinedVC).noGenotypes().make());
         }
 
     }
 
-    @VisibleForTesting
-    static boolean isSpanningDeletion(final Allele allele){
-        return allele.equals(Allele.SPAN_DEL) || allele.equals(GATKVCFConstants.SPANNING_DELETION_SYMBOLIC_ALLELE_DEPRECATED);
-    }
+    //assume input genotypes are diploid
 
     /**
-     * Cleans up genotype-level annotations that need to be updated.
-     * 1. move MIN_DP to DP if present
-     * 2. propagate DP to AD if not present
-     * 3. remove SB if present
-     * 4. change the PGT value from "0|1" to "1|1" for homozygous variant genotypes
-     * 5. move GQ to RGQ if the site is monomorphic
-     *
-     * @param vc            the VariantContext with the Genotypes to fix
-     * @param createRefGTs  if true we will also create proper hom ref genotypes since we assume the site is monomorphic
-     * @return a new set of Genotypes
+     * Remove the NON_REF allele from the genotypes, updating PLs, ADs, and GT calls
+     * @param vc the input variant with NON_REF
+     * @return a GenotypesContext
      */
-    @VisibleForTesting
-    static List<Genotype> cleanupGenotypeAnnotations(final VariantContext vc, final boolean createRefGTs) {
-        final GenotypesContext oldGTs = vc.getGenotypes();
-        final List<Genotype> recoveredGs = new ArrayList<>(oldGTs.size());
-        for ( final Genotype oldGT : oldGTs ) {
-            final Map<String, Object> attrs = new HashMap<>(oldGT.getExtendedAttributes());
-
-            final GenotypeBuilder builder = new GenotypeBuilder(oldGT);
-            int depth = oldGT.hasDP() ? oldGT.getDP() : 0;
-
-            // move the MIN_DP to DP
-            if ( oldGT.hasExtendedAttribute(GATKVCFConstants.MIN_DP_FORMAT_KEY) ) {
-                depth = parseInt(oldGT.getAnyAttribute(GATKVCFConstants.MIN_DP_FORMAT_KEY));
-                builder.DP(depth);
-                attrs.remove(GATKVCFConstants.MIN_DP_FORMAT_KEY);
-            }
-
-            attrs.remove(GATKVCFConstants.STRAND_BIAS_BY_SAMPLE_KEY);
-
-            // update PGT for hom vars
-            if ( oldGT.isHomVar() && oldGT.hasExtendedAttribute(GATKVCFConstants.HAPLOTYPE_CALLER_PHASING_GT_KEY) ) {
-                attrs.put(GATKVCFConstants.HAPLOTYPE_CALLER_PHASING_GT_KEY, PHASED_HOM_VAR_STRING);
-            }
-
-            // create AD if it's not there
-            if ( !oldGT.hasAD() && vc.isVariant() ) {
-                final int[] AD = new int[vc.getNAlleles()];
-                AD[0] = depth;
-                builder.AD(AD);
-            }
-
-            if ( createRefGTs ) {
-                // move the GQ to RGQ
-                if (oldGT.hasGQ()) {
-                    builder.noGQ();
-                    attrs.put(GATKVCFConstants.REFERENCE_GENOTYPE_QUALITY, oldGT.getGQ());
-                }
-
-                //keep 0 depth samples and 0 GQ samples as no-call
-                if (depth > 0 && oldGT.hasGQ() && oldGT.getGQ() > 0) {
-                    final List<Allele> refAlleles = Collections.nCopies(oldGT.getPloidy(), vc.getReference());
-                    builder.alleles(refAlleles);
-                }
-
-                // also, the PLs are technically no longer usable
-                builder.noPL();
-            }
-
-            recoveredGs.add(builder.noAttributes().attributes(attrs).make());
+    private GenotypesContext removeNonRefAllele(final VariantContext vc) {
+        final List<Allele> inputAllelesWithNonRef = vc.getAlleles();
+        if(!inputAllelesWithNonRef.get(inputAllelesWithNonRef.size()-1).equals(GATKVCFConstants.NON_REF_SYMBOLIC_ALLELE_NAME)) {
+            throw new IllegalStateException("This tool assumes that the NON_REF allele is listed last, as in HaplotypeCaller GVCF output,"
+            + " but that was not the case at position " + vc.getContig() + ":" + vc.getStart() + ".");
         }
-        return recoveredGs;
+        final GenotypesContext mergedGenotypes = GenotypesContext.create();
+
+        final int maximumAlleleCount = inputAllelesWithNonRef.size();
+        final int newPLsize = maximumAlleleCount <= PIPELINE_MAX_ALT_COUNT? likelihoodSizeCache[maximumAlleleCount] :
+                GenotypeLikelihoods.numLikelihoods(maximumAlleleCount, GATKVariantContextUtils.DEFAULT_PLOIDY);
+        final List<Allele> targetAlleles = inputAllelesWithNonRef.subList(0, maximumAlleleCount-1); //remove NON_REF
+
+        for ( final Genotype g : vc.getGenotypes() ) {
+            final String name = g.getSampleName();
+            if(g.getPloidy() != GATKVariantContextUtils.DEFAULT_PLOIDY) {
+                throw new UserException.BadInput("This tool assumes diploid genotypes, but sample " + name + " has ploidy "
+                        + g.getPloidy() + " at position " + vc.getContig() + ":" + vc.getStart() + ".");
+            }
+            final GenotypeBuilder genotypeBuilder = new GenotypeBuilder(g);
+            genotypeBuilder.name(name);
+            if (g.hasPL()) {
+                final int[] PLs = trimPLs(g, newPLsize);
+                final int[] AD = g.hasAD() ? trimADs(g, targetAlleles.size()) : null;
+                genotypeBuilder.PL(PLs).AD(AD);
+                GATKVariantContextUtils.makeGenotypeCall(GATKVariantContextUtils.DEFAULT_PLOIDY, genotypeBuilder, GenotypeAssignmentMethod.USE_PLS_TO_ASSIGN, GenotypeLikelihoods.fromPLs(PLs).getAsVector(), targetAlleles);
+            }
+            mergedGenotypes.add(genotypeBuilder.make());
+        }
+
+        return mergedGenotypes;
     }
 
-    private static int parseInt(Object attribute){
-        if( attribute instanceof String) {
-            return Integer.parseInt((String)attribute);
-        } else if ( attribute instanceof Number){
-            return ((Number) attribute).intValue();
-        } else {
-            throw new IllegalArgumentException("Expected a Number or a String but found something else.");
-        }
+    static int[] trimPLs(final Genotype g, final int newPLsize) {
+        final int[] oldPLs = g.getPL();
+        final int[] newPLs = new int[newPLsize];
+        System.arraycopy(oldPLs, 0, newPLs, 0, newPLsize);
+        return newPLs;
     }
 
-    /**
-     * Creates a UnifiedArgumentCollection with appropriate values filled in from the arguments in this walker
-     * @return a complete UnifiedArgumentCollection
-     */
-    private UnifiedArgumentCollection createUAC() {
-        final UnifiedArgumentCollection uac = new UnifiedArgumentCollection();
-        uac.genotypeArgs = new GenotypeCalculationArgumentCollection(genotypeArgs);
-        return uac;
+    static int[] trimADs(final Genotype g, final int newAlleleNumber) {
+        final int[] oldADs = g.getAD();
+        final int[] newADs = new int[newAlleleNumber];
+        System.arraycopy(oldADs, 0, newADs, 0, newAlleleNumber);
+        return newADs;
     }
 
     @Override
@@ -338,4 +286,3 @@ public final class MakeVQSRinput extends VariantWalker {
         }
     }
 }
-
