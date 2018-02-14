@@ -1,15 +1,16 @@
 import "mutect2.wdl" as m2
 
 #
-# This workflow runs M2 on a set of bam quadruplets.  For each quadruplet, the first pair of bams is the discovery
-#   tumor-normal bam that you wish to validate.  The second pair are the validation tumor-normal to use only for
-#   validation.  Typically, the validation pair would be separate replicates from a different sequencing process
-#   (e.g. matched WGS vs discovery exome bams).  The validation is actually the variants in the VCF of the discovery
-#   pair against the pileup information in the validation bams.
+# This is the validation step of a workflow that requires a set of bam quadruplets.  Each quadruplet comprises a
+# discovery tumor-normal pair to validate and a validation tumor-normal pair.  Typically, the validation pair would be
+# separate replicates from a different sequencing process e.g. matched WGS vs discovery exome bams.
+
+# In the first step of the workflow we run M2 on both pairs, generating a reassembly bamout for the validation pair and a
+# vcf callset for the discovery pair.  In this step we validate this callset against the pileup information in the validation bamout.
 #
-# All parameters *_file_list or *_file_index_list are files of filenames.  Each filename is on a separate line.  The
-#   order must be maintained for each of these file lists.  In other words, each line in the eight input files must
-#   corrsepond to the same discovery and validation pairs.
+# We use pileups from the bamout and not from the original bam in order to obtain a standardized and consistent representation
+# for indels.
+#
 #
 # This workflow is not recommended for use with RNA as validation, due to biases in RNA pileups.
 #
@@ -25,55 +26,20 @@ workflow m2_validation {
     File ref_dict
     File tumor_bam
     File tumor_bai
+
+    File validation_bamout
+    File validation_bamout_bai
     String tumor_sample_name
     File? normal_bam
     File? normal_bai
     String? normal_sample_name
-    File? pon
-    File? pon_index
-    Int scatter_count
-    File? gnomad
-    File? gnomad_index
-    File? variants_for_contamination
-    File? variants_for_contamination_index
-    Boolean? run_orientation_bias_filter
+
+
     Int? preemptible_attempts
-    Array[String]? artifact_modes
-    String? m2_extra_args
-    String? m2_extra_filtering_args
 
     File? gatk_override
 
     String gatk_docker
-    #####
-
-    ### parameter-fu
-    ### Discovery bams
-    File tumor_bam_file_list
-    Array[File] tumor_bam_files = read_lines(tumor_bam_file_list)
-
-    File tumor_bam_file_index_list
-    Array[File] tumor_bam_indices = read_lines(tumor_bam_file_index_list)
-
-    File normal_bam_file_list
-    Array[File] normal_bam_files = read_lines(normal_bam_file_list)
-
-    File normal_bam_file_index_list
-    Array[File] normal_bam_indices = read_lines(normal_bam_file_index_list)
-
-    ### validation bams
-    File validation_tumor_bam_file_list
-    Array[File] validation_tumor_bam_files = read_lines(validation_tumor_bam_file_list)
-
-    File validation_tumor_bam_file_index_list
-    Array[File] validation_tumor_bam_indices = read_lines(validation_tumor_bam_file_index_list)
-
-    File validation_normal_bam_file_list
-    Array[File] validation_normal_bam_files = read_lines(validation_normal_bam_file_list)
-
-    File validation_normal_bam_file_index_list
-    Array[File] validation_normal_bam_indices = read_lines(validation_normal_bam_file_index_list)
-    #####
 
     ### Validation parameters
     # A name to identify this group of samples.  This can be arbitrary, but should not contain special characters, nor whitespace.
@@ -81,62 +47,6 @@ workflow m2_validation {
 
     # Only use reads with a minimum base quality for the base at the variant.
     Int? base_quality_cutoff
-
-
-    scatter (i in range(length(tumor_bam_files))) {
-        call m2.Mutect2 as m2_tn {
-            input:
-                gatk_override = gatk_override,
-                gatk_docker = gatk_docker,
-                intervals = intervals,
-                ref_fasta = ref_fasta,
-                ref_fai = ref_fai,
-                ref_dict = ref_dict,
-                tumor_bam = tumor_bam_files[i],
-                tumor_bai = tumor_bam_indices[i],
-                normal_bam = normal_bam_files[i],
-                normal_bai = normal_bam_indices[i],
-                scatter_count = scatter_count,
-                pon = pon,
-                pon_index = pon_index,
-                gnomad = gnomad,
-                gnomad_index = gnomad_index,
-                run_orientation_bias_filter = run_orientation_bias_filter,
-                preemptible_attempts = preemptible_attempts,
-                artifact_modes = artifact_modes,
-                variants_for_contamination = variants_for_contamination,
-                variants_for_contamination_index = variants_for_contamination_index,
-                m2_extra_args = m2_extra_args,
-                m2_extra_filtering_args = m2_extra_filtering_args,
-                make_bamout = true
-        }
-
-        call m2.Mutect2 as m2_validation_bamout {
-            input:
-                gatk_override = gatk_override,
-                gatk_docker = gatk_docker,
-                intervals = intervals,
-                ref_fasta = ref_fasta,
-                ref_fai = ref_fai,
-                ref_dict = ref_dict,
-                tumor_bam = validation_tumor_bam_files[i],
-                tumor_bai = validation_tumor_bam_indices[i],
-                normal_bam = validation_normal_bam_files[i],
-                normal_bai = validation_normal_bam_indices[i],
-                scatter_count = scatter_count,
-                pon = pon,
-                pon_index = pon_index,
-                gnomad = gnomad,
-                gnomad_index = gnomad_index,
-                run_orientation_bias_filter = run_orientation_bias_filter,
-                preemptible_attempts = preemptible_attempts,
-                artifact_modes = artifact_modes,
-                variants_for_contamination = variants_for_contamination,
-                variants_for_contamination_index = variants_for_contamination_index,
-                m2_extra_args = m2_extra_args,
-                m2_extra_filtering_args = m2_extra_filtering_args,
-                make_bamout = true
-        }
 
         # Delete the reads from the normal and HC sample from the bamout.
         call rewrite_bam_by_sample as m2_rewrite_bam_by_sample {
@@ -177,7 +87,6 @@ workflow m2_validation {
                 tumor_bam = validation_normal_bam_files[i],
                 tumor_bai = validation_normal_bam_indices[i]
         }
-    }
 
     call tar_results as tar_results_m2 {
         input:
