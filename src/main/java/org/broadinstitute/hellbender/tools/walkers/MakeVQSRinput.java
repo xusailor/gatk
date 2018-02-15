@@ -1,6 +1,5 @@
 package org.broadinstitute.hellbender.tools.walkers;
 
-import com.google.common.annotations.VisibleForTesting;
 import htsjdk.variant.variantcontext.*;
 import htsjdk.variant.variantcontext.writer.VariantContextWriter;
 import htsjdk.variant.vcf.*;
@@ -14,26 +13,19 @@ import org.broadinstitute.hellbender.cmdline.programgroups.ShortVariantDiscovery
 import org.broadinstitute.hellbender.engine.*;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.walkers.annotator.*;
-import org.broadinstitute.hellbender.tools.walkers.annotator.allelespecific.AS_RMSMappingQuality;
 import org.broadinstitute.hellbender.tools.walkers.genotyper.*;
-import org.broadinstitute.hellbender.tools.walkers.genotyper.afcalc.GeneralPloidyFailOverAFCalculatorProvider;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
-import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.genotyper.IndexedSampleList;
 import org.broadinstitute.hellbender.utils.genotyper.SampleList;
 import org.broadinstitute.hellbender.utils.logging.OneShotLogger;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFHeaderLines;
 import org.broadinstitute.hellbender.utils.variant.GATKVariantContextUtils;
-import picard.cmdline.programgroups.VariantFilteringProgramGroup;
 
 import java.io.File;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-
-import static org.broadinstitute.hellbender.tools.walkers.ReferenceConfidenceVariantContextMerger.generateAD;
-import static org.broadinstitute.hellbender.tools.walkers.ReferenceConfidenceVariantContextMerger.generatePL;
 
 /**
  * Perform "quick and dirty" joint genotyping on one or more samples pre-called with HaplotypeCaller
@@ -157,7 +149,7 @@ public final class MakeVQSRinput extends VariantWalker {
 
         //initialize PL size cache -- HTSJDK cache only goes up to 4 alts, but I need 6
         for(final int numAlleles : IntStream.rangeClosed(1, PIPELINE_MAX_ALT_COUNT + 1).boxed().collect(Collectors.toList())) {
-            likelihoodSizeCache[numAlleles] = GenotypeLikelihoods.numLikelihoods(numAlleles, GATKVariantContextUtils.DEFAULT_PLOIDY);
+            likelihoodSizeCache[numAlleles-1] = GenotypeLikelihoods.numLikelihoods(numAlleles, GATKVariantContextUtils.DEFAULT_PLOIDY);
         }
     }
 
@@ -234,14 +226,14 @@ public final class MakeVQSRinput extends VariantWalker {
      */
     private GenotypesContext removeNonRefAllele(final VariantContext vc) {
         final List<Allele> inputAllelesWithNonRef = vc.getAlleles();
-        if(!inputAllelesWithNonRef.get(inputAllelesWithNonRef.size()-1).equals(GATKVCFConstants.NON_REF_SYMBOLIC_ALLELE_NAME)) {
+        if(!inputAllelesWithNonRef.get(inputAllelesWithNonRef.size()-1).equals(Allele.NON_REF_ALLELE)) {
             throw new IllegalStateException("This tool assumes that the NON_REF allele is listed last, as in HaplotypeCaller GVCF output,"
             + " but that was not the case at position " + vc.getContig() + ":" + vc.getStart() + ".");
         }
         final GenotypesContext mergedGenotypes = GenotypesContext.create();
 
         final int maximumAlleleCount = inputAllelesWithNonRef.size();
-        final int newPLsize = maximumAlleleCount <= PIPELINE_MAX_ALT_COUNT? likelihoodSizeCache[maximumAlleleCount] :
+        final int newPLsize = maximumAlleleCount <= PIPELINE_MAX_ALT_COUNT? likelihoodSizeCache[maximumAlleleCount-1] :
                 GenotypeLikelihoods.numLikelihoods(maximumAlleleCount, GATKVariantContextUtils.DEFAULT_PLOIDY);
         final List<Allele> targetAlleles = inputAllelesWithNonRef.subList(0, maximumAlleleCount-1); //remove NON_REF
 
