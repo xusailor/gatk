@@ -1,24 +1,19 @@
 import "mutect2.wdl" as m2
 
 #
-# This is the validation step of a workflow that requires a set of bam quadruplets.  Each quadruplet comprises a
-# discovery tumor-normal pair to validate and a validation tumor-normal pair.  Typically, the validation pair would be
-# separate replicates from a different sequencing process e.g. matched WGS vs discovery exome bams.
+# This is the validation step of a workflow that requires four bams, a discovery tumor-normal pair and a validation
+# tumor-normal pair.  Typically, the validation pair would be separate replicates from a different sequencing process
+# e.g. matched WGS vs discovery exome bams.
 
 # In the first step of the workflow we run M2 on both pairs, generating a reassembly bamout for the validation pair and a
-# vcf callset for the discovery pair.  In this step we validate this callset against the pileup information in the validation bamout.
+# vcf callset for the discovery pair.  The bamout is important for indel validation because it yields pileups that are
+# consistent with M2's local reassembly.
 #
-# We use pileups from the bamout and not from the original bam in order to obtain a standardized and consistent representation
-# for indels.
+# In this step we validate the discovery callset against the validation bamout pileup
 #
 # This workflow is not recommended for use with RNA as validation, due to biases in RNA pileups.
 #
-# Attempts are made to reconcile the pileup validation with the M2 haplotype creation process.
-#
-# The output is a tar file of validation reports (tsv) for the
-#
 workflow m2_validation {
-    File? intervals
     File ref_fasta
     File ref_fai
     File ref_dict
@@ -54,7 +49,6 @@ workflow m2_validation {
         input:
             gatk_override = gatk_override,
             gatk_docker = gatk_docker,
-            intervals = m2_tn.filtered_vcf, //TODO: what to do with this line
             ref_fasta = ref_fasta,
             ref_fai = ref_fai,
             ref_dict = ref_dict,
@@ -77,7 +71,6 @@ workflow m2_validation {
 task Validate {
     File? gatk_override
     String gatk_docker
-    File intervals
 
     File ref_fasta
     File ref_fai
