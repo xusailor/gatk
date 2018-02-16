@@ -14,6 +14,7 @@ import org.broadinstitute.hellbender.engine.*;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.walkers.annotator.*;
 import org.broadinstitute.hellbender.tools.walkers.genotyper.*;
+import org.broadinstitute.hellbender.utils.MathUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.genotyper.IndexedSampleList;
 import org.broadinstitute.hellbender.utils.genotyper.SampleList;
@@ -76,8 +77,10 @@ public final class MakeVQSRinput extends VariantWalker {
     private final RMSMappingQuality MQcalculator = RMSMappingQuality.getInstance();
 
     private static final int PIPELINE_MAX_ALT_COUNT = 6;
+    private static final int ASSUMED_PLOIDY = GATKVariantContextUtils.DEFAULT_PLOIDY;
     // cache the ploidy 2 PL array sizes for increasing numbers of alts up to the maximum of PIPELINE_MAX_ALT_COUNT
     final int[] likelihoodSizeCache = new int[PIPELINE_MAX_ALT_COUNT + 1];
+    final static ArrayList<GenotypeLikelihoodCalculator> GLCcache = new ArrayList<>();
 
 
     @Argument(fullName = StandardArgumentDefinitions.OUTPUT_LONG_NAME, shortName = StandardArgumentDefinitions.OUTPUT_SHORT_NAME,
@@ -147,10 +150,15 @@ public final class MakeVQSRinput extends VariantWalker {
 
         setupVCFWriter(inputVCFHeader, samples);
 
+        GenotypeLikelihoodCalculators GLCprovider = new GenotypeLikelihoodCalculators();
+
         //initialize PL size cache -- HTSJDK cache only goes up to 4 alts, but I need 6
         for(final int numAlleles : IntStream.rangeClosed(1, PIPELINE_MAX_ALT_COUNT + 1).boxed().collect(Collectors.toList())) {
-            likelihoodSizeCache[numAlleles-1] = GenotypeLikelihoods.numLikelihoods(numAlleles, GATKVariantContextUtils.DEFAULT_PLOIDY);
+            likelihoodSizeCache[numAlleles-1] = GenotypeLikelihoods.numLikelihoods(numAlleles, ASSUMED_PLOIDY);
+            GLCcache.add(numAlleles - 1, GLCprovider.getInstance(ASSUMED_PLOIDY, numAlleles));
         }
+
+
     }
 
     private void setupVCFWriter(VCFHeader inputVCFHeader, SampleList samples) {
@@ -234,27 +242,65 @@ public final class MakeVQSRinput extends VariantWalker {
 
         final int maximumAlleleCount = inputAllelesWithNonRef.size();
         final int newPLsize = maximumAlleleCount <= PIPELINE_MAX_ALT_COUNT? likelihoodSizeCache[maximumAlleleCount-1] :
-                GenotypeLikelihoods.numLikelihoods(maximumAlleleCount, GATKVariantContextUtils.DEFAULT_PLOIDY);
+                GenotypeLikelihoods.numLikelihoods(maximumAlleleCount, ASSUMED_PLOIDY);
         final List<Allele> targetAlleles = inputAllelesWithNonRef.subList(0, maximumAlleleCount-1); //remove NON_REF
 
         for ( final Genotype g : vc.getGenotypes() ) {
             final String name = g.getSampleName();
-            if(g.getPloidy() != GATKVariantContextUtils.DEFAULT_PLOIDY) {
+            if(g.getPloidy() != ASSUMED_PLOIDY && !isGDBnoCall(g)) {
                 throw new UserException.BadInput("This tool assumes diploid genotypes, but sample " + name + " has ploidy "
                         + g.getPloidy() + " at position " + vc.getContig() + ":" + vc.getStart() + ".");
             }
             final GenotypeBuilder genotypeBuilder = new GenotypeBuilder(g);
             genotypeBuilder.name(name);
+            //TODO: there's a case here where we drop PLs because of too many alts, but GTs still have NON_REF
+            if (g.hasAD()) {
+                final int[] AD = trimADs(g, targetAlleles.size());
+                genotypeBuilder.AD(AD);
+            }
             if (g.hasPL()) {
                 final int[] PLs = trimPLs(g, newPLsize);
-                final int[] AD = g.hasAD() ? trimADs(g, targetAlleles.size()) : null;
-                genotypeBuilder.PL(PLs).AD(AD);
-                GATKVariantContextUtils.makeGenotypeCall(GATKVariantContextUtils.DEFAULT_PLOIDY, genotypeBuilder, GenotypeAssignmentMethod.USE_PLS_TO_ASSIGN, GenotypeLikelihoods.fromPLs(PLs).getAsVector(), targetAlleles);
+                genotypeBuilder.PL(PLs);
+                makeGenotypeCall(genotypeBuilder, GenotypeLikelihoods.fromPLs(PLs).getAsVector(), targetAlleles);
+            }
+            if (g.countAllele(Allele.NON_REF_ALLELE) > 0){
+                genotypeBuilder.alleles(GATKVariantContextUtils.noCallAlleles(ASSUMED_PLOIDY)).noGQ();
+            }
+            if (isGDBnoCall(g)) {
+                genotypeBuilder.alleles(GATKVariantContextUtils.noCallAlleles(ASSUMED_PLOIDY));
             }
             mergedGenotypes.add(genotypeBuilder.make());
         }
 
         return mergedGenotypes;
+    }
+
+    public static void makeGenotypeCall(final GenotypeBuilder gb,
+                                        final double[] genotypeLikelihoods,
+                                        final List<Allele> allelesToUse) {
+
+        if ( genotypeLikelihoods == null || !GATKVariantContextUtils.isInformative(genotypeLikelihoods) ) {
+            gb.alleles(GATKVariantContextUtils.noCallAlleles(ASSUMED_PLOIDY)).noGQ();
+        } else {
+            final int maxLikelihoodIndex = MathUtils.maxElementIndex(genotypeLikelihoods);
+            final GenotypeLikelihoodCalculator glCalc = GLCcache.get(allelesToUse.size());
+            final GenotypeAlleleCounts alleleCounts = glCalc.genotypeAlleleCountsAt(maxLikelihoodIndex);
+
+            gb.alleles(alleleCounts.asAlleleList(allelesToUse));
+            final int numAltAlleles = allelesToUse.size() - 1;
+            if ( numAltAlleles > 0 ) {
+                gb.log10PError(GenotypeLikelihoods.getGQLog10FromLikelihoods(maxLikelihoodIndex, genotypeLikelihoods));
+            }
+        }
+    }
+
+    private boolean isGDBnoCall(Genotype g) {
+        if (g.getPloidy() == 1 && g.getAllele(0).isReference()) {
+            return true;
+        }
+        else {
+            return false;
+        }
     }
 
     static int[] trimPLs(final Genotype g, final int newPLsize) {
