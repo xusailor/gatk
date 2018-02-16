@@ -1,5 +1,3 @@
-import "mutect2.wdl" as m2
-
 #
 # This is the validation step of a workflow that requires four bams, a discovery tumor-normal pair and a validation
 # tumor-normal pair.  Typically, the validation pair would be separate replicates from a different sequencing process
