@@ -26,9 +26,6 @@ workflow m2_validation {
     File validation_normal_bam
     File validation_normal_bai
 
-    String discovery_tumor_sample
-    String validation_tumor_sample
-
     Int? preemptible_attempts
     File? gatk_override
     String gatk_docker
@@ -46,8 +43,7 @@ workflow m2_validation {
             ref_dict = ref_dict,
             name_bam = validation_tumor_bam,
             name_bai = validation_tumor_bai,
-            bam = validation_bamout,
-            sample_to_keep = validation_tumor_sample
+            bam = validation_bamout
     }
 
     call Validate {
@@ -57,7 +53,6 @@ workflow m2_validation {
             ref_fasta = ref_fasta,
             ref_fai = ref_fai,
             ref_dict = ref_dict,
-            discovery_tumor_sample = discovery_tumor_sample,
             validation_tumor_bam = TumorOnlyValidationBamout.single_sample_bam,
             validation_tumor_bai = TumorOnlyValidationBamout.single_sample_bai,
             validation_normal_bam = validation_normal_bam,
@@ -81,8 +76,6 @@ task Validate {
     File ref_fai
     File ref_dict
 
-    String discovery_tumor_sample
-
     # For validating M2 these should generally be the bamout, not the bam used for input.
     File validation_tumor_bam
     File validation_tumor_bai
@@ -101,17 +94,18 @@ task Validate {
 
     Int final_mem = select_first([mem, 7])
 
-    String output_file_name = "validation-${discovery_tumor_sample}.tsv"
+    String output_file_name = "validation.tsv"
 
     command <<<
         set -e
         export GATK_LOCAL_JAR=${default="/root/gatk.jar" gatk_override}
 
+        discovery_tumor_sample=`grep '##tumor_sample=' ${calls_vcf} | sed 's/=/ /g' | while read junk sample; do echo $sample; done`
         gatk --java-options "-Xmx${final_mem-1}g" GetSampleName -R ${ref_fasta} -I ${validation_normal_bam} -O validation_normal_name.txt
         gatk --java-options "-Xmx${final_mem-1}g" GetSampleName -R ${ref_fasta} -I ${validation_tumor_bam} -O validation_tumor_name.txt
 
         gatk --java-options "-Xmx${final_mem-1}g" ValidateBasicSomaticShortMutations \
-            -discv ${discovery_tumor_sample} \
+            -discv $discovery_tumor_sample \
             -V ${calls_vcf} \
             -I ${validation_tumor_bam} \
             -I ${validation_normal_bam} \
@@ -139,7 +133,6 @@ task SelectSingleSample {
     String gatk_docker
 
     # Also, removes samples not in the list from the header
-    String sample_to_keep
     File bam
     File name_bam
     File name_bai
@@ -162,11 +155,13 @@ task SelectSingleSample {
 
         gatk --java-options "-Xmx${final_mem-1}g" GetSampleName -R ${ref_fasta} -I ${name_bam} -O name.txt
 
-        gatk --java-options "-Xmx${final_mem-1}g" PrintReads -I ${bam} -O ${output_basename}.tmp.bam -RF SampleReadFilter -sample `cat name.txt`
+        name=`cat name.txt`
+
+        gatk --java-options "-Xmx${final_mem-1}g" PrintReads -I ${bam} -O ${output_basename}.tmp.bam -RF SampleReadFilter -sample $name
 
         samtools view -H ${output_basename}.tmp.bam > tmpheader.txt
         egrep -v "^\@RG" tmpheader.txt > new_header.txt
-        egrep "^\@RG" tmpheader.txt | egrep "${sample_to_keep}" >> new_header.txt
+        egrep "^\@RG" tmpheader.txt | egrep "$name" >> new_header.txt
         gatk --java-options "-Xmx${final_mem-1}g" ReplaceSamHeader --HEADER new_header.txt -I ${output_basename}.tmp.bam -O ${output_basename}.bam
 
         samtools index ${output_basename}.bam ${output_basename}.bai
