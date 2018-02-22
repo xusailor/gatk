@@ -155,7 +155,11 @@ task GetSampleNames {
         String discovery_normal_sample = read_string("discovery_normal_sample.txt")
         String validation_tumor_sample = read_string("validation_tumor_sample.txt")
         String validation_normal_sample = read_string("validation_normal_sample.txt")
+    }
 
+    runtime {
+        docker: "ubuntu:16.04"
+        memory: "1 GB"
     }
 }
 
