@@ -28,6 +28,11 @@ workflow m2_validation {
     File validation_bamout
     File validation_bamout_bai
 
+    # Unfortunately, we can't rely entirely on the validation bamout, because when no variation appears in the validation bam
+    # no bamout reads are emitted
+    File validation_normal_bam
+    File validation_normal_bai
+
     Int? preemptible_attempts
     File? gatk_override
     String gatk_docker
@@ -46,14 +51,6 @@ workflow m2_validation {
             sample_to_keep = GetSampleNames.validation_tumor_sample
     }
 
-    call SingleSampleBam as NormalValidationBamout {
-        input:
-            gatk_override = gatk_override,
-            gatk_docker = gatk_docker,
-            input_bam = validation_bamout,
-            sample_to_keep = GetSampleNames.validation_normal_sample
-    }
-
     call Validate {
         input:
             gatk_override = gatk_override,
@@ -63,8 +60,8 @@ workflow m2_validation {
             ref_dict = ref_dict,
             validation_tumor_bamout = TumorValidationBamout.single_sample_bam,
             validation_tumor_bamout_bai = TumorValidationBamout.single_sample_bai,
-            validation_normal_bamout = NormalValidationBamout.single_sample_bam,
-            validation_normal_bamout_bai = NormalValidationBamout.single_sample_bai,
+            validation_normal_bam = validation_normal_bam,
+            validation_normal_bai = validation_normal_bai,
             discovery_tumor_sample = GetSampleNames.discovery_tumor_sample,
             validation_tumor_sample = GetSampleNames.validation_tumor_sample,
             validation_normal_sample = GetSampleNames.validation_normal_sample,
@@ -87,11 +84,10 @@ task Validate {
     File ref_fai
     File ref_dict
 
-    # For validating M2 these should generally be the bamout, not the bam used for input.
     File validation_tumor_bamout
     File validation_tumor_bamout_bai
-    File validation_normal_bamout
-    File validation_normal_bamout_bai
+    File validation_normal_bam
+    File validation_normal_bai
 
     File discovery_calls_vcf
     File discovery_calls_vcf_idx
@@ -119,7 +115,7 @@ task Validate {
             -discv ${discovery_tumor_sample} \
             -V ${discovery_calls_vcf} \
             -I ${validation_tumor_bamout} \
-            -I ${validation_normal_bamout} \
+            -I ${validation_normal_bam} \
             -valcase  ${validation_tumor_sample} \
             -valcontrol ${validation_normal_sample} \
             -O ${output_file_name} \

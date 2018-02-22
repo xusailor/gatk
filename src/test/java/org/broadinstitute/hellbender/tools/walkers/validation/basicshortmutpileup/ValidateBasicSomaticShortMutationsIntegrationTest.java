@@ -26,6 +26,42 @@ public class ValidateBasicSomaticShortMutationsIntegrationTest extends CommandLi
     private static final String REFERENCE = largeFileTestDir + "human_g1k_v37.20.21.fasta";
 
     @Test
+    public void tmpTest() {
+
+            final File outputFile = IOUtils.createTempFile("basicTest", ".txt");
+            final List<String> arguments = new ArrayList<>();
+            arguments.add("-" + ValidateBasicSomaticShortMutations.SAMPLE_NAME_DISCOVERY_VCF_SHORT_NAME);
+            arguments.add("TCGA-BL-A0C8-01A-11D-A271-08");
+            arguments.add("-" + ValidateBasicSomaticShortMutations.SAMPLE_NAME_VALIDATION_CASE);
+            arguments.add("TCGA-BL-A0C8-01B-04D-A46W-08");
+            arguments.add("-" + ValidateBasicSomaticShortMutations.SAMPLE_NAME_VALIDATION_CONTROL);
+            arguments.add("TCGA-BL-A0C8-10A-01D-A46W-08");
+
+            arguments.add("-" + StandardArgumentDefinitions.VARIANT_SHORT_NAME);
+            arguments.add("/Users/davidben/Desktop/calls.vcf");
+
+            arguments.add("-" + StandardArgumentDefinitions.INPUT_SHORT_NAME);
+            arguments.add("/Users/davidben/Desktop/ece97141-8935-4ba1-88b4-c99e06b50f80%2FMutect2%2F80ac3690-37b3-471c-8dd4-4fae7dca8c39%2Fcall-MergeBamOuts%2FG92908.TCGA-BL-A0C8-01B-04D-A46W-08.2-unfiltered.out.bam");
+
+            arguments.add("--interval-set-rule");
+            arguments.add("INTERSECTION");
+
+            arguments.add("-L");
+            arguments.add("20");
+
+            arguments.add("-L");
+            arguments.add("/Users/davidben/Desktop/calls.vcf");
+
+            arguments.add("-" + StandardArgumentDefinitions.REFERENCE_SHORT_NAME);
+            arguments.add(REFERENCE);
+
+            arguments.add("-" + StandardArgumentDefinitions.OUTPUT_SHORT_NAME);
+            arguments.add(outputFile.getAbsolutePath());
+            arguments.add("--verbosity");
+            arguments.add("INFO");
+            runCommandLine(arguments);
+    }
+    @Test
     public void testBasic() {
         // This test is simply running the full tool and making sure that there are no serious errors.
         //  No variants should validate, since the validation bam is not the same one used for calling.
