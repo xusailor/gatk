@@ -87,6 +87,10 @@ public final class MakeVQSRinput extends VariantWalker {
             doc="File to which variants should be written", optional=false)
     private File outputFile;
 
+    @Argument(fullName = "output-database-name", shortName = "output-db",
+            doc="File to which the sites-only annotation database derived from these input samples should be written", optional=true)
+    private String outputDBname = null;
+
     @ArgumentCollection
     private GenotypeCalculationArgumentCollection genotypeArgs = new GenotypeCalculationArgumentCollection();
 
@@ -112,14 +116,8 @@ public final class MakeVQSRinput extends VariantWalker {
     @ArgumentCollection
     private final DbsnpArgumentCollection dbsnp = new DbsnpArgumentCollection();
 
-    // the genotyping engine
-    private GenotypingEngine<?> genotypingEngine;
-    // the annotation engine
-    private VariantAnnotatorEngine annotationEngine;
-
-    private ReferenceConfidenceVariantContextMerger merger;
-
     private VariantContextWriter vcfWriter;
+    private VariantContextWriter annotationDBwriter = null;
 
     /** these are used when {@link #onlyOutputCallsStartingInIntervals) is true */
     private List<SimpleInterval> intervals;
@@ -146,8 +144,6 @@ public final class MakeVQSRinput extends VariantWalker {
 
         final SampleList samples = new IndexedSampleList(inputVCFHeader.getGenotypeSamples()); //todo should this be getSampleNamesInOrder?
 
-        annotationEngine = VariantAnnotatorEngine.ofSelectedMinusExcluded(variantAnnotationArgumentCollection, dbsnp.dbsnp, Collections.emptyList());
-
         setupVCFWriter(inputVCFHeader, samples);
 
         GenotypeLikelihoodCalculators GLCprovider = new GenotypeLikelihoodCalculators();
@@ -168,22 +164,31 @@ public final class MakeVQSRinput extends VariantWalker {
         // Remove GCVFBlocks
         headerLines.removeIf(vcfHeaderLine -> vcfHeaderLine.getKey().startsWith(GVCF_BLOCK));
 
-        headerLines.addAll(annotationEngine.getVCFAnnotationDescriptions());
-
         // add headers for annotations added by this tool
-        headerLines.add(GATKVCFHeaderLines.getInfoLine(GATKVCFConstants.MLE_ALLELE_COUNT_KEY));
-        headerLines.add(GATKVCFHeaderLines.getInfoLine(GATKVCFConstants.MLE_ALLELE_FREQUENCY_KEY));
-        headerLines.add(GATKVCFHeaderLines.getFormatLine(GATKVCFConstants.REFERENCE_GENOTYPE_QUALITY));
+        headerLines.add(VCFStandardHeaderLines.getInfoLine(VCFConstants.ALLELE_COUNT_KEY));
+        headerLines.add(VCFStandardHeaderLines.getInfoLine(VCFConstants.ALLELE_FREQUENCY_KEY));
+        headerLines.add(VCFStandardHeaderLines.getInfoLine(VCFConstants.ALLELE_NUMBER_KEY));
+        headerLines.add(VCFStandardHeaderLines.getInfoLine(VCFConstants.ALLELE_NUMBER_KEY));
+        headerLines.add(GATKVCFHeaderLines.getInfoLine(GATKVCFConstants.FISHER_STRAND_KEY));
+        headerLines.add(GATKVCFHeaderLines.getInfoLine(GATKVCFConstants.STRAND_ODDS_RATIO_KEY));
+        headerLines.add(GATKVCFHeaderLines.getInfoLine(GATKVCFConstants.SB_TABLE_KEY));
+        headerLines.add(GATKVCFHeaderLines.getInfoLine(GATKVCFConstants.QUAL_BY_DEPTH_KEY));
+        headerLines.add(VCFStandardHeaderLines.getInfoLine(VCFConstants.RMS_MAPPING_QUALITY_KEY));
         headerLines.add(VCFStandardHeaderLines.getInfoLine(VCFConstants.DEPTH_KEY));   // needed for gVCFs without DP tags
         if ( dbsnp.dbsnp != null  ) {
             VCFStandardHeaderLines.addStandardInfoLines(headerLines, true, VCFConstants.DBSNP_KEY);
         }
 
         vcfWriter = createVCFWriter(outputFile);
+        if (outputDBname != null) {
+            annotationDBwriter = createVCFWriter(new File(outputDBname));
+        }
 
         final Set<String> sampleNameSet = samples.asSetOfSamples();
         final VCFHeader vcfHeader = new VCFHeader(headerLines, new TreeSet<>(sampleNameSet));
+        final VCFHeader dbHeader = new VCFHeader(headerLines);
         vcfWriter.writeHeader(vcfHeader);
+        annotationDBwriter.writeHeader(dbHeader);
     }
 
     @Override
@@ -202,19 +207,67 @@ public final class MakeVQSRinput extends VariantWalker {
 
         //GenomicsDB merged all the annotations, but we still need to finalize MQ and QD annotations
         VariantContextBuilder builder = new VariantContextBuilder(MQcalculator.finalizeRawMQ(variant));
+        VariantContextBuilder builder2 = new VariantContextBuilder(variant);
 
         final int variantDP = variant.getAttributeAsInt(GATKVCFConstants.VARIANT_DEPTH_KEY, 0);
         double QD = QUALapprox / (double)variantDP;
         builder.attribute(GATKVCFConstants.QUAL_BY_DEPTH_KEY, QD).log10PError(QUALapprox/-10.0);
 
-        //remove the NON_REF allele and update genotypes
+        int[] SBsum = {0,0,0,0};
+
+        final List<Allele> targetAlleles;
+        final boolean removeNonRef;
         if (variant.getAlleles().contains(Allele.NON_REF_ALLELE)) { //I don't know why, but sometimes GDB returns a context without a NON_REF
-            final GenotypesContext calledGenotypes = removeNonRefAllele(variant);
-            builder.genotypes(calledGenotypes);
-            builder.alleles(variant.getAlleles().subList(0, variant.getAlleles().size() - 1));
+            targetAlleles = variant.getAlleles().subList(0, variant.getAlleles().size() - 1);
+            removeNonRef = true;
+        }
+        else {
+            targetAlleles = variant.getAlleles();
+            removeNonRef = false;
         }
 
+        final Map<Allele, Integer> alleleCountMap = new HashMap<>();
+        //initialize the count map
+        for (final Allele a : targetAlleles) {
+            alleleCountMap.put(a, 0);
+        }
+        //Get AC and SB annotations
+        //remove the NON_REF allele and update genotypes if necessary
+
+        final GenotypesContext calledGenotypes = iterateOnGenotypes(variant, targetAlleles, alleleCountMap, SBsum, removeNonRef);
+        Integer numCalledAlleles = 0;
+        for (final Allele a : targetAlleles) {
+            numCalledAlleles += alleleCountMap.get(a);
+        }
+        final List<Integer> targetAlleleCounts = new ArrayList<>();
+        final List<Double> targetAlleleFreqs = new ArrayList<>();
+        for (final Allele a : targetAlleles) {
+            if (!a.isReference()) {
+                targetAlleleCounts.add(alleleCountMap.get(a));
+                targetAlleleFreqs.add((double)alleleCountMap.get(a) / numCalledAlleles);
+            }
+        }
+
+        builder.genotypes(calledGenotypes);
+        builder2.noGenotypes();
+        builder.alleles(targetAlleles);
+        builder2.alleles(targetAlleles);
+
+        builder.attribute(VCFConstants.ALLELE_COUNT_KEY, targetAlleleCounts.size() == 1 ? targetAlleleCounts.get(0) : targetAlleleCounts);
+        builder.attribute(VCFConstants.ALLELE_FREQUENCY_KEY, targetAlleleFreqs.size() == 1 ? targetAlleleFreqs.get(0) : targetAlleleFreqs);
+        builder.attribute(VCFConstants.ALLELE_NUMBER_KEY, numCalledAlleles);
+        builder.attribute(GATKVCFConstants.FISHER_STRAND_KEY, FisherStrand.makeValueObjectForAnnotation(FisherStrand.pValueForContingencyTable(StrandBiasTest.decodeSBBS(SBsum))));
+        builder.attribute(GATKVCFConstants.STRAND_ODDS_RATIO_KEY, StrandOddsRatio.formattedValue(StrandOddsRatio.calculateSOR(StrandBiasTest.decodeSBBS(SBsum))));
+
+        builder2.attribute(VCFConstants.ALLELE_COUNT_KEY, targetAlleleCounts.size() == 1 ? targetAlleleCounts.get(0) : targetAlleleCounts);
+        builder2.attribute(VCFConstants.ALLELE_FREQUENCY_KEY, targetAlleleFreqs.size() == 1 ? targetAlleleFreqs.get(0) : targetAlleleFreqs);
+        builder2.attribute(VCFConstants.ALLELE_NUMBER_KEY, numCalledAlleles);
+        builder2.attribute(GATKVCFConstants.SB_TABLE_KEY, SBsum);
+
         VariantContext result = builder.make();
+        if (annotationDBwriter != null) {
+            annotationDBwriter.add(builder2.make());  //we don't seem to have a sites-only option anymore, so do it manually
+        }
 
         SimpleInterval variantStart = new SimpleInterval(result.getContig(), result.getStart(), result.getStart());
         if (!onlyOutputCallsStartingInIntervals || intervals.stream().anyMatch(interval -> interval.contains(variantStart))) {
@@ -232,7 +285,9 @@ public final class MakeVQSRinput extends VariantWalker {
      * @param vc the input variant with NON_REF
      * @return a GenotypesContext
      */
-    private GenotypesContext removeNonRefAllele(final VariantContext vc) {
+    private GenotypesContext iterateOnGenotypes(final VariantContext vc, final List<Allele> targetAlleles,
+                                                final Map<Allele,Integer> targetAlleleCounts, final int[] SBsum,
+                                                final boolean removeNonref) {
         final List<Allele> inputAllelesWithNonRef = vc.getAlleles();
         if(!inputAllelesWithNonRef.get(inputAllelesWithNonRef.size()-1).equals(Allele.NON_REF_ALLELE)) {
             throw new IllegalStateException("This tool assumes that the NON_REF allele is listed last, as in HaplotypeCaller GVCF output,"
@@ -241,9 +296,15 @@ public final class MakeVQSRinput extends VariantWalker {
         final GenotypesContext mergedGenotypes = GenotypesContext.create();
 
         final int maximumAlleleCount = inputAllelesWithNonRef.size();
-        final int newPLsize = maximumAlleleCount <= PIPELINE_MAX_ALT_COUNT? likelihoodSizeCache[maximumAlleleCount-1] :
-                GenotypeLikelihoods.numLikelihoods(maximumAlleleCount, ASSUMED_PLOIDY);
-        final List<Allele> targetAlleles = inputAllelesWithNonRef.subList(0, maximumAlleleCount-1); //remove NON_REF
+        int newPLsize;
+        if (maximumAlleleCount <= PIPELINE_MAX_ALT_COUNT) {
+            newPLsize = likelihoodSizeCache[maximumAlleleCount-1];
+        }
+        else {
+            newPLsize = GenotypeLikelihoods.numLikelihoods(maximumAlleleCount, ASSUMED_PLOIDY);
+        }
+        //final int newPLsize = maximumAlleleCount <= PIPELINE_MAX_ALT_COUNT? likelihoodSizeCache[maximumAlleleCount-1] :
+        //       GenotypeLikelihoods.numLikelihoods(maximumAlleleCount, ASSUMED_PLOIDY);
 
         for ( final Genotype g : vc.getGenotypes() ) {
             final String name = g.getSampleName();
@@ -251,25 +312,52 @@ public final class MakeVQSRinput extends VariantWalker {
                 throw new UserException.BadInput("This tool assumes diploid genotypes, but sample " + name + " has ploidy "
                         + g.getPloidy() + " at position " + vc.getContig() + ":" + vc.getStart() + ".");
             }
-            final GenotypeBuilder genotypeBuilder = new GenotypeBuilder(g);
-            genotypeBuilder.name(name);
-            //TODO: there's a case here where we drop PLs because of too many alts, but GTs still have NON_REF
-            if (g.hasAD()) {
-                final int[] AD = trimADs(g, targetAlleles.size());
-                genotypeBuilder.AD(AD);
+            final Genotype calledGT;
+            if (removeNonref) {
+                final GenotypeBuilder genotypeBuilder = new GenotypeBuilder(g);
+                genotypeBuilder.name(name);
+                //TODO: there's a case here where we drop PLs because of too many alts, but GTs might still have NON_REF
+                if (g.hasAD()) {
+                    final int[] AD = trimADs(g, targetAlleles.size());
+                    genotypeBuilder.AD(AD);
+                }
+                if (g.hasPL()) {
+                    final int[] PLs = trimPLs(g, newPLsize);
+                    genotypeBuilder.PL(PLs);
+                    makeGenotypeCall(genotypeBuilder, GenotypeLikelihoods.fromPLs(PLs).getAsVector(), targetAlleles);
+                }
+                if (g.countAllele(Allele.NON_REF_ALLELE) > 0) {
+                    genotypeBuilder.alleles(GATKVariantContextUtils.noCallAlleles(ASSUMED_PLOIDY)).noGQ();
+                }
+                if (isGDBnoCall(g)) {
+                    genotypeBuilder.alleles(GATKVariantContextUtils.noCallAlleles(ASSUMED_PLOIDY));
+                }
+                Genotype g2 = genotypeBuilder.make();
+                calledGT = g2;
+                mergedGenotypes.add(g2);
             }
-            if (g.hasPL()) {
-                final int[] PLs = trimPLs(g, newPLsize);
-                genotypeBuilder.PL(PLs);
-                makeGenotypeCall(genotypeBuilder, GenotypeLikelihoods.fromPLs(PLs).getAsVector(), targetAlleles);
+            else {
+                calledGT = g;
             }
-            if (g.countAllele(Allele.NON_REF_ALLELE) > 0){
-                genotypeBuilder.alleles(GATKVariantContextUtils.noCallAlleles(ASSUMED_PLOIDY)).noGQ();
+
+            if (g.hasAnyAttribute(GATKVCFConstants.STRAND_BIAS_BY_SAMPLE_KEY)) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    final List<Integer> sbbsList = (ArrayList<Integer>) g.getAnyAttribute(GATKVCFConstants.STRAND_BIAS_BY_SAMPLE_KEY);
+                    MathUtils.addToArrayInPlace(SBsum, AnnotationUtils.listToArray(sbbsList));
+                }
+                catch (ClassCastException e) {
+                    throw new IllegalStateException("The MakeVQSRinput tool assumes that input variants come from " +
+                            "GenomicsDB and have SB FORMAT fields that have already been parsed into ArrayLists.");
+                }
             }
-            if (isGDBnoCall(g)) {
-                genotypeBuilder.alleles(GATKVariantContextUtils.noCallAlleles(ASSUMED_PLOIDY));
+            for (int i = 0; i < ASSUMED_PLOIDY; i++) {
+                Allele a = calledGT.getAllele(i);
+                int count = targetAlleleCounts.containsKey(a) ? targetAlleleCounts.get(a) : 0;
+                if (!a.equals(Allele.NO_CALL)) {
+                    targetAlleleCounts.put(a,count+1);
+                }
             }
-            mergedGenotypes.add(genotypeBuilder.make());
         }
 
         return mergedGenotypes;
@@ -321,6 +409,9 @@ public final class MakeVQSRinput extends VariantWalker {
     public void closeTool() {
         if ( vcfWriter != null) {
             vcfWriter.close();
+        }
+        if (annotationDBwriter != null) {
+            annotationDBwriter.close();
         }
     }
 }

@@ -30,4 +30,19 @@ public final class AnnotationUtils {
         return StringUtils.join(stringList, ",");
     }
 
+    /**
+     * Helper function to parse the genotype annotation into the SB annotation array
+     * @param arrayList the ArrayList returned from StrandBiasBySample.annotate()
+     * @return the array used by the per-sample Strand Bias annotation
+     */
+    public static int[] listToArray( final List<Integer> arrayList ) {
+        final int[] array = new int[arrayList.size()];
+        int index = 0;
+        for ( Integer item : arrayList ) {
+            array[index++] = item;
+        }
+
+        return array;
+    }
+
 }
