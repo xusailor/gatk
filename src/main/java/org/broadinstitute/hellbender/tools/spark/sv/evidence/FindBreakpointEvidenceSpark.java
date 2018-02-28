@@ -967,8 +967,6 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
             final Logger logger, final Broadcast<SVIntervalTree<SVInterval>> highCoverageSubintervalTree) {
         // find all breakpoint evidence, then filter for pile-ups
         final int nContigs = header.getSequenceDictionary().getSequences().size();
-        final int minEvidenceWeight = params.minEvidenceWeight;
-        final int minCoherentEvidenceWeight = params.minCoherentEvidenceWeight;
         final int allowedOverhang = params.allowedShortFragmentOverhang;
         final int minEvidenceMapQ = params.minEvidenceMapQ;
 
@@ -1019,9 +1017,7 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
                             evidenceItrList.add(evidenceItr2);
                             final Iterator<BreakpointEvidence> evidenceItr =
                                     FlatMapGluer.concatIterators(evidenceItrList.iterator());
-                            return new BreakpointDensityFilter(evidenceItr,readMetadata,
-                                    minEvidenceWeight,minCoherentEvidenceWeight,xChecker,
-                                    minEvidenceMapQ);
+                            return BreakpointFilterFactory.getFilter(evidenceItr,readMetadata, params, xChecker);
                         }, true);
 
         filteredEvidenceRDD.cache();
@@ -1052,9 +1048,8 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
 
         // reapply the density filter (all data collected -- no more worry about partition boundaries).
         final Iterator<BreakpointEvidence> evidenceIterator =
-                new BreakpointDensityFilter(collectedEvidence.iterator(),
-                        broadcastMetadata.value(), minEvidenceWeight, minCoherentEvidenceWeight,
-                        new PartitionCrossingChecker(), minEvidenceMapQ);
+                BreakpointFilterFactory.getFilter(collectedEvidence.iterator(), broadcastMetadata.value(), params,
+                        new PartitionCrossingChecker() );
         final List<BreakpointEvidence> allEvidence = new ArrayList<>(collectedEvidence.size());
         while ( evidenceIterator.hasNext() ) {
             allEvidence.add(evidenceIterator.next());

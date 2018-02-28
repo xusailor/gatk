@@ -155,8 +155,9 @@ public class BreakpointEvidenceTest extends GATKBaseTest {
         Assert.assertFalse(splitRead.isEvidenceUpstreamOfBreakpoint());
         Assert.assertTrue(splitRead.hasDistalTargets(metadata, 20));
         final StrandedInterval targetInterval = splitRead.getDistalTargets(metadata, 20).get(0);
-        Assert.assertEquals(targetInterval.getInterval(), new SVInterval(0, 140825564, 140825571));
         Assert.assertTrue(targetInterval.getStrand());
+        Assert.assertEquals(targetInterval.getInterval(), new SVInterval(0, 140825564, 140825571));
+
     }
 
     @Test(groups = "sv")

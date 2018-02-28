@@ -330,6 +330,7 @@ public final class CigarUtils {
         return false;
     }
 
+
     /**
      * Left align the given cigar sequentially. This is needed because AlignmentUtils doesn't accept cigars with more than one indel in them.
      * This is a target of future work to incorporate and generalize into AlignmentUtils for use by others.

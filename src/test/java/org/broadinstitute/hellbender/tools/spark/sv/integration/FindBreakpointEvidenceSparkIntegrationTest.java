@@ -27,15 +27,18 @@ public class FindBreakpointEvidenceSparkIntegrationTest extends CommandLineProgr
         final String kmerIgnoreListLoc;
         final String alignerRefIndexImgLoc;
         final String outputDir;
+        final float bamCoverage;
 
         FindBreakpointEvidenceSparkIntegrationTestArgs(final String bamLoc,
                                                        final String kmerIgnoreListLoc,
                                                        final String alignerRefIndexImgLoc,
-                                                       final String outputDir) {
+                                                       final String outputDir,
+                                                       final float bamCoverage) {
             this.bamLoc = bamLoc;
             this.kmerIgnoreListLoc = kmerIgnoreListLoc;
             this.alignerRefIndexImgLoc = alignerRefIndexImgLoc;
             this.outputDir = outputDir;
+            this.bamCoverage = bamCoverage;
         }
 
         String getCommandLine() {
@@ -45,7 +48,9 @@ public class FindBreakpointEvidenceSparkIntegrationTest extends CommandLineProgr
                     " --kmers-to-ignore " + kmerIgnoreListLoc +
                     " --breakpoint-intervals " + outputDir + "/intervals" +
                     " --fastq-dir "            + outputDir + "/fastq" +
-                    " --target-link-file "      + outputDir + "/targetLinks.bedpe";
+                    " --target-link-file "      + outputDir + "/targetLinks.bedpe" +
+                    " --min-evidence-count " + 15 / bamCoverage +
+                    " --min-coherent-evidence-count " + 7 / bamCoverage;
         }
 
         @Override
@@ -68,7 +73,7 @@ public class FindBreakpointEvidenceSparkIntegrationTest extends CommandLineProgr
         Files.createDirectories(Paths.get(tempDirNew.getAbsolutePath()+"/fastq"));
         tests.add(new Object[]{new FindBreakpointEvidenceSparkIntegrationTestArgs(SVIntegrationTestDataProvider.TEST_BAM,
                 SVIntegrationTestDataProvider.KMER_KILL_LIST, SVIntegrationTestDataProvider.ALIGNER_INDEX_IMG,
-                tempDirNew.getAbsolutePath())});
+                tempDirNew.getAbsolutePath(), SVIntegrationTestDataProvider.TEST_BAM_COVERAGE)});
 
         return tests.toArray(new Object[][]{});
     }
