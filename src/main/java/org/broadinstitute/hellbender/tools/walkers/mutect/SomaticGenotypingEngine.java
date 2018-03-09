@@ -124,9 +124,9 @@ public class SomaticGenotypingEngine extends AssemblyBasedCallerGenotypingEngine
             final Optional<LikelihoodMatrix<Allele>> log10NormalMatrix =
                     getForNormal(() -> log10Likelihoods.sampleMatrix(log10Likelihoods.indexOfSample(matchedNormalSampleName)));
 
-            final PerAlleleCollection<Double> tumorLog10Odds = somaticLog10Odds(log10TumorMatrix);
+            final PerAlleleCollection<Double> tumorLog10Odds = SomaticLikelihoodsEngine.somaticLog10Odds(log10TumorMatrix);
             final Optional<PerAlleleCollection<Double>> normalLog10Odds = getForNormal(() -> diploidAltLog10Odds(log10NormalMatrix.get()));
-            final Optional<PerAlleleCollection<Double>> normalArtifactLog10Odds = getForNormal(() -> somaticLog10Odds(log10NormalMatrix.get()));
+            final Optional<PerAlleleCollection<Double>> normalArtifactLog10Odds = getForNormal(() -> SomaticLikelihoodsEngine.somaticLog10Odds(log10NormalMatrix.get()));
 
             final List<Pair<Allele, Allele>> givenAltAndRefAllelesInOriginalContext =  getVCsAtThisLocation(Collections.emptyList(), loc, givenAlleles).stream()
                     .flatMap(vc -> vc.getAlternateAlleles().stream().map(allele -> ImmutablePair.of(allele, vc.getReference()))).collect(Collectors.toList());
@@ -283,7 +283,7 @@ public class SomaticGenotypingEngine extends AssemblyBasedCallerGenotypingEngine
         return result;
     }
 
-    private int getRefIndex(LikelihoodMatrix<Allele> matrix) {
+    public static <A extends Allele> int getRefIndex(LikelihoodMatrix<A> matrix) {
         final OptionalInt optionalRefIndex = IntStream.range(0, matrix.numberOfAlleles()).filter(a -> matrix.getAllele(a).isReference()).findFirst();
         Utils.validateArg(optionalRefIndex.isPresent(), "No ref allele found in likelihoods");
         return optionalRefIndex.getAsInt();
@@ -328,7 +328,7 @@ public class SomaticGenotypingEngine extends AssemblyBasedCallerGenotypingEngine
     }
 
     //convert a likelihood matrix of alleles x reads into a RealMatrix
-    public static RealMatrix getAsRealMatrix(final LikelihoodMatrix<Allele> matrix) {
+    public static <A extends Allele> RealMatrix getAsRealMatrix(final LikelihoodMatrix<A> matrix) {
         final RealMatrix result = new Array2DRowRealMatrix(matrix.numberOfAlleles(), matrix.numberOfReads());
         result.walkInOptimizedOrder(new DefaultRealMatrixChangingVisitor() {
             @Override

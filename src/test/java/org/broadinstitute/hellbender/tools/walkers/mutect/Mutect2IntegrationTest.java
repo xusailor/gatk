@@ -86,8 +86,8 @@ public class Mutect2IntegrationTest extends CommandLineProgramTest {
                 "-XL", mask.getAbsolutePath(),
                 "-O", unfilteredVcf.getAbsolutePath(),
                 "--" + M2ArgumentCollection.DOWNSAMPLING_STRIDE_LONG_NAME, "20",
-                "--max-reads-per-alignment-start", "4",
-                "--" + M2ArgumentCollection.MAX_SUSPICIOUS_READS_PER_ALIGNMENT_START_LONG_NAME, "4").stream().collect(Collectors.toList());
+                "--max-reads-per-alignment-start", "4", "--haplotype-mode",
+                "--" + M2ArgumentCollection.MAX_SUSPICIOUS_READS_PER_ALIGNMENT_START_LONG_NAME, "4"
 
         // tumor-only calling with gnomAD
         if (!tumorOnly) {

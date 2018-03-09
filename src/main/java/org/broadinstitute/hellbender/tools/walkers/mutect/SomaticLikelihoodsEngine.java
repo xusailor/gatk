@@ -9,7 +9,7 @@ import org.broadinstitute.hellbender.utils.*;
 import org.broadinstitute.hellbender.utils.genotyper.LikelihoodMatrix;
 
 import java.util.Arrays;
-import java.util.Collections;
+import java.util.stream.IntStream;
 
 /**
  * Created by David Benjamin on 3/9/17.
@@ -105,4 +105,20 @@ public class SomaticLikelihoodsEngine {
         return MathUtils.logToLog10(logNumerator - logDenominator);
     }
 
+    // compute the likelihoods that each allele is contained at some allele fraction in the sample
+    public static <A extends Allele> PerAlleleCollection<Double> somaticLog10Odds(final LikelihoodMatrix<A> log10Matrix) {
+        final double log10EvidenceWithAllAlleles = log10Matrix.numberOfReads() == 0 ? 0 :
+                log10Evidence(SomaticGenotypingEngine.getAsRealMatrix(log10Matrix));
+
+        final PerAlleleCollection<Double> lods = new PerAlleleCollection<>(PerAlleleCollection.Type.ALT_ONLY);
+        final int refIndex = SomaticGenotypingEngine.getRefIndex(log10Matrix);
+        IntStream.range(0, log10Matrix.numberOfAlleles()).filter(a -> a != refIndex).forEach(a -> {
+            final A allele = log10Matrix.getAllele(a);
+            final LikelihoodMatrix<A> log10MatrixWithoutThisAllele = SubsettedLikelihoodMatrix.excludingAllele(log10Matrix, allele);
+            final double log10EvidenceWithoutThisAllele = log10MatrixWithoutThisAllele.numberOfReads() == 0 ? 0 :
+                    log10Evidence(SomaticGenotypingEngine.getAsRealMatrix(log10MatrixWithoutThisAllele));
+            lods.setAlt(allele, log10EvidenceWithAllAlleles - log10EvidenceWithoutThisAllele);
+        });
+        return lods;
+    }
 }

@@ -23,11 +23,14 @@ public class M2ArgumentCollection extends AssemblyBasedCallerArgumentCollection 
     public static final String PANEL_OF_NORMALS_SHORT_NAME = "pon";
     public static final String GENOTYPE_PON_SITES_LONG_NAME = "genotype-pon-sites";
     public static final String GENOTYPE_GERMLINE_SITES_LONG_NAME = "genotype-germline-sites";
+    public static final String HAPLOTYPE_MODE_LONG_NAME = "haplotype-mode";
+    public static final String MAX_ALT_HAPLOTYPES_LONG_NAME = "max-alt-haplotypes";
     public static final String GERMLINE_RESOURCE_LONG_NAME = "germline-resource";
     public static final String DEFAULT_AF_LONG_NAME = "af-of-alleles-not-in-resource";
     public static final String DEFAULT_AF_SHORT_NAME = "default-af";
-    public static final String EMISSION_LOG_LONG_NAME = "tumor-lod-to-emit";
-    public static final String EMISSION_LOG_SHORT_NAME = "emit-lod";
+    public static final String EMISSION_LOD_LONG_NAME = "tumor-lod-to-emit";
+    public static final String EMISSION_LOD_SHORT_NAME = "emit-lod";
+    public static final String HAPLOTYPE_LOD_LONG_NAME = "haplotype-lod";
     public static final String INITIAL_TUMOR_LOD_LONG_NAME = "initial-tumor-lod";
     public static final String INITIAL_TUMOR_LOD_SHORT_NAME = "init-lod";
     public static final String MAX_POPULATION_AF_LONG_NAME = "max-population-af";
@@ -74,6 +77,21 @@ public class M2ArgumentCollection extends AssemblyBasedCallerArgumentCollection 
     @Argument(fullName= GENOTYPE_GERMLINE_SITES_LONG_NAME, doc="(EXPERIMENTAL) Call all apparent germline site even though they will ultimately be filtered.", optional = true)
     public boolean genotypeGermlineSites = false;
 
+	    /**
+     * By default M2 1) assembles haplotypes, 2) aligns reads to haplotypes to obtain a ReadLikelihoods<Haplotype> matrix
+     * 3) splits haplotypes into alleles, 4) generates ReadLikelihoods<Allele> by assigning a read-allele likelihood to be
+     * the largest read-haplotype likelihood of haplotypes consistent with that allele, 5) calls alleles via the
+     * {@link SomaticLikelihoodsEngine}.
+     *
+     * In this mode, after steps 1) and 2) we send read-haplotype likelihoods directly to the {@link SomaticLikelihoodsEngine}
+     * to obtain haplotype calls.
+     */
+    @Argument(fullName= HAPLOTYPE_MODE_LONG_NAME, doc="Use haplotypes, not alleles, as the fundamental unit of calling.", optional = true)
+    public boolean haplotypeMode = false;
+
+    @Argument(fullName= MAX_ALT_HAPLOTYPES_LONG_NAME, doc="Maximum number of alt haplotypes to keep per assembly region", optional = true)
+    public int maxAltHaplotypes = 3;
+
     /**
      * A resource, such as gnomAD, containing population allele frequencies of common and rare variants.
      */
@@ -94,8 +112,14 @@ public class M2ArgumentCollection extends AssemblyBasedCallerArgumentCollection 
      * Default setting of 3 is permissive and will emit some amount of negative training data that 
      * {@link FilterMutectCalls} should then filter.
      */
-    @Argument(fullName = EMISSION_LOG_LONG_NAME, shortName = EMISSION_LOG_SHORT_NAME, optional = true, doc = "LOD threshold to emit tumor variant to VCF.")
+    @Argument(fullName = EMISSION_LOD_LONG_NAME, shortName = EMISSION_LOD_SHORT_NAME, optional = true, doc = "LOD threshold to emit tumor variant to VCF.")
     public double emissionLodThreshold = 3.0;
+
+    /**
+     * In haplotype mode, discard haplotypes with lod lower than this threshold
+     */
+    @Argument(fullName = HAPLOTYPE_LOD_LONG_NAME, optional = true, doc = "LOD threshold for haplotypes in haplotype mode.")
+    public double haplotypeLodThreshold = 3.0;
 
     /**
      * Only variants with estimated tumor LODs exceeding this threshold will be considered active.

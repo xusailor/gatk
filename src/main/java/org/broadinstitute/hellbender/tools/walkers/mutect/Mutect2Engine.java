@@ -2,6 +2,7 @@ package org.broadinstitute.hellbender.tools.walkers.mutect;
 
 import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMSequenceDictionary;
+import htsjdk.variant.variantcontext.Allele;
 import htsjdk.variant.variantcontext.VariantContext;
 import htsjdk.variant.variantcontext.writer.VariantContextWriter;
 import htsjdk.variant.vcf.*;
@@ -239,6 +240,33 @@ public final class Mutect2Engine implements AssemblyRegionEvaluator {
         final Map<String,List<GATKRead>> reads = splitReadsBySample( regionForGenotyping.getReads() );
 
         final ReadLikelihoods<Haplotype> readLikelihoods = likelihoodCalculationEngine.computeReadLikelihoods(assemblyResult,samplesList,reads);
+
+        if (MTAC.haplotypeMode) {
+            final PerAlleleCollection<Double> tumorHaplotypeLog10Odds = SomaticLikelihoodsEngine
+                    .somaticLog10Odds(readLikelihoods.sampleMatrix(readLikelihoods.indexOfSample(tumorSampleName)));
+            final List<Haplotype> allAltHaplotypes = readLikelihoods.alleles().stream().filter(Haplotype::isNonReference).collect(Collectors.toList());
+            final double[] altHaplotypeLog10Odds = tumorHaplotypeLog10Odds.asDoubleArray(allAltHaplotypes);
+            final double[] altHaplotypeLog10OddsBestToWorst = Arrays.stream(altHaplotypeLog10Odds).boxed()
+                    .sorted(Comparator.reverseOrder())
+                    .mapToDouble(x -> x)
+                    .toArray();
+            final int numberOfAltHaplotypesWithEnoughLog10OddsToEmit = (int) Arrays.stream(altHaplotypeLog10Odds)
+                    .filter(x -> x > MTAC.haplotypeLodThreshold).count();
+            final int numberOfAltHaplotypesToEmit = Math.min(numberOfAltHaplotypesWithEnoughLog10OddsToEmit, MTAC.maxAltHaplotypes);
+            if (numberOfAltHaplotypesToEmit == 0) {
+                return NO_CALLS;
+            }
+
+            // emit haplotypes with log10Odds greater than or equal to this threshold
+            final double altHaplotypeLog10OddsThreshold = altHaplotypeLog10OddsBestToWorst[numberOfAltHaplotypesToEmit - 1];
+
+            final List<Haplotype> haplotypesToKeep = readLikelihoods.alleles().stream()
+                    .filter(h -> h.isReference() || tumorHaplotypeLog10Odds.getAlt(h) >= altHaplotypeLog10OddsThreshold)
+                    .collect(Collectors.toList());
+
+            // discard haplotypes with low log10Odds
+            readLikelihoods.marginalize(haplotypesToKeep.stream().collect(Collectors.toMap(h -> h, h -> Arrays.asList(h))));
+        }
         final Map<GATKRead,GATKRead> readRealignments = AssemblyBasedCallerUtils.realignReadsToTheirBestHaplotype(readLikelihoods, assemblyResult.getReferenceHaplotype(), assemblyResult.getPaddedReferenceLoc(), aligner);
         readLikelihoods.changeReads(readRealignments);
 

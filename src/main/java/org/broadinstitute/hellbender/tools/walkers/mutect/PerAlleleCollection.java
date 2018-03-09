@@ -106,7 +106,7 @@ public class PerAlleleCollection<X extends Number> {
         return altAlleleValueMap.get(allele);
     }
 
-    public double[] asDoubleArray(final Collection<Allele> allelesInOrder) {
+    public double[] asDoubleArray(final Collection<? extends Allele> allelesInOrder) {
         return allelesInOrder.stream().mapToDouble(a -> get(a).doubleValue()).toArray();
     }
     
