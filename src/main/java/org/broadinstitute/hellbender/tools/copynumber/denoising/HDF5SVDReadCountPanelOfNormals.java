@@ -22,6 +22,7 @@ import org.broadinstitute.hellbender.tools.copynumber.utils.HDF5Utils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
+import org.broadinstitute.hellbender.utils.param.ParamUtils;
 import org.broadinstitute.hellbender.utils.spark.SparkConverter;
 
 import java.io.File;
@@ -254,6 +255,7 @@ public final class HDF5SVDReadCountPanelOfNormals implements SVDReadCountPanelOf
                               final boolean doImputeZeros,
                               final double extremeOutlierTruncationPercentile,
                               final int numEigensamplesRequested,
+                              final int maximumChunkSize,
                               final JavaSparkContext ctx) {
         try (final HDF5File file = new HDF5File(outFile, HDF5File.OpenMode.CREATE)) {
             logger.info("Creating " + outFile.getAbsolutePath() + "...");
@@ -270,7 +272,7 @@ public final class HDF5SVDReadCountPanelOfNormals implements SVDReadCountPanelOf
 
             logger.info(String.format("Writing original read counts (%d x %d)...",
                     originalReadCounts.getColumnDimension(), originalReadCounts.getRowDimension()));
-            pon.writeOriginalReadCountsPath(originalReadCounts);
+            pon.writeOriginalReadCountsPath(originalReadCounts, maximumChunkSize);
 
             logger.info(String.format("Writing original sample filenames (%d)...", originalSampleFilenames.size()));
             pon.writeOriginalSampleFilenames(originalSampleFilenames);
@@ -342,7 +344,7 @@ public final class HDF5SVDReadCountPanelOfNormals implements SVDReadCountPanelOf
                 pon.writeSingularValues(singularValues);
 
                 logger.info(String.format("Writing eigensample vectors (transposed to %d x %d)...", eigensampleVectors[0].length, eigensampleVectors.length));
-                pon.writeEigensampleVectors(eigensampleVectors);
+                pon.writeEigensampleVectors(eigensampleVectors, maximumChunkSize);
             } else {
                 //if the panel only contains a single sample or zero eigensamples were requested,
                 //we do not store singular values or eigenvectors in the panel
@@ -376,8 +378,9 @@ public final class HDF5SVDReadCountPanelOfNormals implements SVDReadCountPanelOf
         file.makeStringArray(SEQUENCE_DICTIONARY_PATH, stringWriter.toString());
     }
 
-    private void writeOriginalReadCountsPath(final RealMatrix originalReadCounts) {
-        HDF5Utils.writeChunkedDoubleMatrix(file, ORIGINAL_READ_COUNTS_PATH, originalReadCounts.getData(), CHUNK_DIVISOR);
+    private void writeOriginalReadCountsPath(final RealMatrix originalReadCounts,
+                                             final int maximumChunkSize) {
+        HDF5Utils.writeChunkedDoubleMatrix(file, ORIGINAL_READ_COUNTS_PATH, originalReadCounts.getData(), maximumChunkSize);
     }
 
     private void writeOriginalSampleFilenames(final List<String> originalSampleFilenames) {
@@ -408,9 +411,9 @@ public final class HDF5SVDReadCountPanelOfNormals implements SVDReadCountPanelOf
         file.makeDoubleArray(PANEL_SINGULAR_VALUES_PATH, singularValues);
     }
 
-    private void writeEigensampleVectors(final double[][] eigensampleVectors) {
+    private void writeEigensampleVectors(final double[][] eigensampleVectors,
+                                         final int maximumChunkSize) {
         HDF5Utils.writeChunkedDoubleMatrix(file, PANEL_EIGENSAMPLE_VECTORS_PATH,
-                new Array2DRowRealMatrix(eigensampleVectors, false).transpose().getData(),
-                CHUNK_DIVISOR);
+                new Array2DRowRealMatrix(eigensampleVectors, false).transpose().getData(), maximumChunkSize);
     }
 }
