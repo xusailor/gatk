@@ -539,6 +539,7 @@ public final class IOUtils {
                 return FileSystems.newFileSystem(uri, new HashMap<>(), cl).provider().getPath(uri);
             }
             catch (ProviderNotFoundException x) {
+                // TODO: whats does this reference to "chr1:1-2" mean ?
                 // not a valid URI. Caller probably just gave us a file name or "chr1:1-2".
                 return Paths.get(uriString);
             }
