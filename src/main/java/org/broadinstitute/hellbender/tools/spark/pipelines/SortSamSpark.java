@@ -8,6 +8,8 @@ import org.broadinstitute.barclay.argparser.BetaFeature;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
 import org.broadinstitute.barclay.help.DocumentedFeature;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
+import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.utils.Utils;
 import picard.cmdline.programgroups.ReadDataManipulationProgramGroup;
 import org.broadinstitute.hellbender.engine.filters.ReadFilter;
 import org.broadinstitute.hellbender.engine.filters.ReadFilterLibrary;
@@ -27,15 +29,27 @@ import java.util.List;
 public final class SortSamSpark extends GATKSparkTool {
     private static final long serialVersionUID = 1L;
 
+    public static final String SORT_ORDER_LONG_NAME = "sort-order";
     @Override
     public boolean requiresReads() { return true; }
 
     @Argument(doc="the output file path", shortName = StandardArgumentDefinitions.OUTPUT_SHORT_NAME, fullName = StandardArgumentDefinitions.OUTPUT_LONG_NAME, optional = false)
-    protected String outputFile;
+    private String outputFile;
+
+    @Argument(doc="the order to sort the file into", fullName = SORT_ORDER_LONG_NAME, optional = true)
+    private SAMFileHeader.SortOrder sortOrder = SAMFileHeader.SortOrder.coordinate;
 
     @Override
     public List<ReadFilter> getDefaultReadFilters() {
         return Collections.singletonList(ReadFilterLibrary.ALLOW_ALL_READS);
+    }
+
+    @Override
+    protected void onStartup() {
+        if( sortOrder.getComparatorInstance() == null){
+            throw new UserException.BadInput("Cannot sort a file in " + sortOrder + " order.  That ordering doesnt define a valid comparator.  "
+                                                     + "Please choose a valid sort order");
+        }
     }
 
     @Override
@@ -55,7 +69,7 @@ public final class SortSamSpark extends GATKSparkTool {
         } else {
             sortedReads = reads; // sorting is done by writeReads below
         }
-        readsHeader.setSortOrder(SAMFileHeader.SortOrder.coordinate);
+        readsHeader.setSortOrder(sortOrder);
         writeReads(ctx, outputFile, sortedReads);
     }
 }
