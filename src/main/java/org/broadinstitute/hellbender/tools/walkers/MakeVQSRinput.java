@@ -209,7 +209,7 @@ public final class MakeVQSRinput extends VariantWalker {
 
         //return early if variant doesn't meet QUAL threshold
         if (!variant.hasAttribute(GATKVCFConstants.RAW_QUAL_APPROX_KEY))
-            warning.warn("Variant is missing the QUALapprox key -- if this tool was run with GenomicsDB input, check the vidmap.json annotation info");
+            warning.warn("Variant is missing the QUALapprox key and will not be output -- if this tool was run with GenomicsDB input, check the vidmap.json annotation info");
         final double QUALapprox = variant.getAttributeAsDouble(GATKVCFConstants.RAW_QUAL_APPROX_KEY, 0.0);
         if(QUALapprox < genotypeArgs.STANDARD_CONFIDENCE_FOR_CALLING - 10*Math.log10(genotypeArgs.snpHeterozygosity))  //we don't apply the prior to the QUAL approx, so do it here
             return;
@@ -325,7 +325,6 @@ public final class MakeVQSRinput extends VariantWalker {
             if (removeNonref) {
                 final GenotypeBuilder genotypeBuilder = new GenotypeBuilder(g);
                 genotypeBuilder.name(name);
-                //TODO: there's a case here where we drop PLs because of too many alts, but GTs might still have NON_REF
                 if (g.hasAD()) {
                     final int[] AD = trimADs(g, targetAlleles.size());
                     genotypeBuilder.AD(AD);
@@ -347,7 +346,10 @@ public final class MakeVQSRinput extends VariantWalker {
                         //makeGenotypeCall(genotypeBuilder, GenotypeLikelihoods.fromPLs(PLs).getAsVector(), targetAlleles);
                     }
                 }
-                calledGT = genotypeBuilder.make();
+                final Map<String, Object> attrs = new HashMap<>(g.getExtendedAttributes());
+                attrs.remove(GATKVCFConstants.MIN_DP_FORMAT_KEY);
+                attrs.remove(GATKVCFConstants.STRAND_BIAS_BY_SAMPLE_KEY);
+                calledGT = genotypeBuilder.attributes(attrs).make();
                 mergedGenotypes.add(calledGT);
             }
             else {
@@ -423,7 +425,7 @@ public final class MakeVQSRinput extends VariantWalker {
             if (GTallelePositions.contains(PLalleleIndexes.alleleIndex2)) {
                 match2 = true;
             }
-            if (match1 && match2 || (g.isHomRef() && (match1 || match2))) {
+            if (match1 && match2 || (g.isHomRef() && (match1 || match2)) || (g.isHomVar() && (match1 || match2) && (PLalleleIndexes.alleleIndex1 == 0 || PLalleleIndexes.alleleIndex2 == 0))) {
                 if (PLs[i] < ABGQ) {
                     ABGQ = PLs[i];
                 }
