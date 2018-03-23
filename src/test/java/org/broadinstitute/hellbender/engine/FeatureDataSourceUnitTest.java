@@ -6,10 +6,9 @@ import htsjdk.variant.variantcontext.VariantContext;
 import htsjdk.variant.vcf.VCFFileReader;
 import htsjdk.variant.vcf.VCFHeader;
 import org.apache.commons.lang3.tuple.Pair;
-import org.broadinstitute.hellbender.exceptions.GATKException;
+import org.broadinstitute.hellbender.GATKBaseTest;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
-import org.broadinstitute.hellbender.GATKBaseTest;
 import org.testng.Assert;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
@@ -409,6 +408,16 @@ public final class FeatureDataSourceUnitTest extends GATKBaseTest {
         try ( FeatureDataSource<VariantContext> featureSource = new FeatureDataSource<>(QUERY_TEST_GVCF) ) {
             final List<VariantContext> queryResults = featureSource.queryAndPrefetch(queryInterval);
             checkVariantQueryResults(queryResults, expectedVariantIDs, queryInterval);
+        }
+    }
+
+    @Test(dataProvider = "IndependentFeatureQueryTestData")
+    public void testForNamedCodec (final SimpleInterval queryInterval, final List<String> UNUSED) {
+        try (final FeatureDataSource<VariantContext> featureSource = new FeatureDataSource<>(QUERY_TEST_VCF)) {
+            final Iterator<VariantContext> featureIterator = featureSource.query(queryInterval);
+            while (featureIterator.hasNext()) {
+                Assert.assertEquals( featureIterator.next().getSource(), QUERY_TEST_VCF.getAbsolutePath() );
+            }
         }
     }
 
