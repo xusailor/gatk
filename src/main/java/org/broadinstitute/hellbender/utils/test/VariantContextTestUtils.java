@@ -1,12 +1,6 @@
 package org.broadinstitute.hellbender.utils.test;
 
 import com.google.common.annotations.VisibleForTesting;
-import htsjdk.variant.variantcontext.Allele;
-import htsjdk.variant.variantcontext.Genotype;
-import htsjdk.variant.variantcontext.VariantContext;
-import htsjdk.variant.vcf.VCFConstants;
-import com.google.common.collect.BiMap;
-import com.google.common.collect.HashBiMap;
 import htsjdk.variant.variantcontext.*;
 import htsjdk.variant.vcf.*;
 import org.apache.commons.collections4.CollectionUtils;
@@ -15,11 +9,7 @@ import org.broadinstitute.hellbender.engine.FeatureDataSource;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.tools.walkers.genotyper.AlleleSubsettingUtils;
 import org.broadinstitute.hellbender.tools.walkers.genotyper.GenotypeAssignmentMethod;
-import org.broadinstitute.hellbender.utils.MathUtils;
 import org.broadinstitute.hellbender.utils.Utils;
-import org.broadinstitute.hellbender.utils.collections.Permutation;
-import org.broadinstitute.hellbender.utils.genotyper.IndexedAlleleList;
-import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFHeaderLines;
 import org.testng.Assert;
 
@@ -377,9 +367,10 @@ public final class VariantContextTestUtils {
             throw new AssertionError("different sizes " + v1.size()+ " vs " + v2.size());
         }
         for (int i = 0; i < v1.size(); i++) {
-            if (! v1.get(i).toStringDecodeGenotypes().equals(v2.get(i).toStringDecodeGenotypes())){
-                throw new AssertionError("different element (compared by toStringDecodeGenotypes) " + i + "\n" + v1.get(i) + "\n" + v2.get(i) );
-            }
+//            if (! v1.get(i).toStringDecodeGenotypes().equals(v2.get(i).toStringDecodeGenotypes())){
+//                throw new AssertionError("different element (compared by toStringDecodeGenotypes) " + i + "\n" + v1.get(i) + "\n" + v2.get(i) );
+//            }
+            assertVariantContextsAreEqual( v1.get(i), v2.get(i), Collections.emptyList() );
         }
     }
 
@@ -393,12 +384,16 @@ public final class VariantContextTestUtils {
         assertAttributesEquals(filterIgnoredAttributes(actual.getAttributes(), attributesToIgnore),
                                filterIgnoredAttributes(expected.getAttributes(), attributesToIgnore));
 
+
+
         Assert.assertEquals(actual.filtersWereApplied(), expected.filtersWereApplied(), "filtersWereApplied");
         Assert.assertEquals(actual.isFiltered(), expected.isFiltered(), "isFiltered");
         Assert.assertEquals(actual.getFilters(), expected.getFilters(), "filters");
         BaseTest.assertEqualsDoubleSmart(actual.getPhredScaledQual(), expected.getPhredScaledQual());
 
         assertVariantContextsHaveSameGenotypes(actual, expected);
+
+        Assert.assertEquals(actual.getType(), expected.getType(), "type");
     }
 
     private static Map<String, Object> filterIgnoredAttributes(final Map<String,Object> attributes, final List<String> attributesToIgnore){
