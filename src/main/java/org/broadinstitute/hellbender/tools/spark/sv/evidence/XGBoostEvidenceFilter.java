@@ -270,7 +270,8 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
         final Iterator<SVIntervalTree.Entry<List<BreakpointEvidence>>> itr = evidenceTree.overlappers(interval);
         int numOverlap = -1; // correct for fact that evidence will overlap with itself
         int numCoherent;
-        if (!evidence.hasDistalTargets(readMetadata, minEvidenceMapQ)) {
+        final Boolean strand = evidence.isEvidenceUpstreamOfBreakpoint();
+        if (strand == null || !evidence.hasDistalTargets(readMetadata, minEvidenceMapQ)) {
             numCoherent = 0;
             while (itr.hasNext()) {
                 numOverlap += itr.next().getValue().size();
@@ -279,10 +280,7 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
         }
 
         numCoherent = -1; // correct for fact that evidence will cohere with itself
-        final boolean strand = evidence.isEvidenceUpstreamOfBreakpoint();
         List<StrandedInterval> distalTargets = evidence.getDistalTargets(readMetadata, minEvidenceMapQ);
-        PairedStrandedIntervalTree<BreakpointEvidence> targetIntervalTree = new PairedStrandedIntervalTree<>();
-
         while (itr.hasNext()) {
             final List<BreakpointEvidence> evidenceForInterval = itr.next().getValue();
             numOverlap += evidenceForInterval.size();

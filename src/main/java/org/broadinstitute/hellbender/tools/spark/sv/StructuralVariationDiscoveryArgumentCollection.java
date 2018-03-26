@@ -184,20 +184,20 @@ public class StructuralVariationDiscoveryArgumentCollection implements Serializa
         public SAMFileHeader.SortOrder assembliesSortOrder = SAMFileHeader.SortOrder.coordinate;
 
         @Argument(doc = "Path to xgboost classifier model file for evidence filtering",
-                fullName = "sv-evidence-filter-model-file", optional=true)
+                fullName = "sv-evidence-filter-model-file")
         public String svEvidenceFilterModelFile = "gatk-resources::/large/sv_evidence_classifier.bin";
 
-        @Argument(doc = "Path to file specifying encoding of categorical variables",
-                fullName = "sv-evidence-categorical-variables-file", optional=true)
+        @Argument(doc = "Path to file specifying encoding of categorical variables", optional=true,
+                fullName = "sv-evidence-categorical-variables-file")
         //public String svCategoricalVariablesFile = "gatk-resources::/large/sv_evidence_categorical_variables.json";
         public String svCategoricalVariablesFile = null;
 
         @Argument(doc = "Minimum classified probability for a piece of evidence to pass xgboost evidence filter",
-                fullName = "sv-evidence-filter-threshold-probability", optional=true)
+                fullName = "sv-evidence-filter-threshold-probability")
         public double svEvidenceFilterThresholdProbability = 0.142397;
 
         @Argument(doc = "Filter method for selecting evidence to group into SV Intervals",
-                fullName = "sv-evidence-filter-type", optional=true)
+                fullName = "sv-evidence-filter-type")
         public SvEvidenceFilterType svEvidenceFilterType = SvEvidenceFilterType.TWO_THRESHOLD;
     }
 

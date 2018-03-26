@@ -50,7 +50,8 @@ public class FindBreakpointEvidenceSparkIntegrationTest extends CommandLineProgr
                     " --fastq-dir "            + outputDir + "/fastq" +
                     " --target-link-file "      + outputDir + "/targetLinks.bedpe" +
                     " --min-evidence-count " + 15 / bamCoverage +
-                    " --min-coherent-evidence-count " + 7 / bamCoverage;
+                    " --min-coherent-evidence-count " + 7 / bamCoverage +
+                    " --sv-evidence-filter-type " + "TWO_THRESHOLD";
         }
 
         @Override
@@ -126,6 +127,50 @@ public class FindBreakpointEvidenceSparkIntegrationTest extends CommandLineProgr
 
             new IntegrationTestSpec(String.join(" ", argsToBeModified), SVIntegrationTestDataProvider.dummyExpectedFileNames)
                     .executeTest("testFindBreakpointEvidenceSparkRunnableMiniCluster-", this);
+        });
+    }
+
+    @Test(dataProvider = "findBreakpointEvidenceSparkIntegrationTest", groups = "sv")
+    public void testFindBreakpointRunnableXGBoostMiniCluster(final FindBreakpointEvidenceSparkIntegrationTestArgs params) throws Exception {
+
+        MiniClusterUtils.runOnIsolatedMiniCluster(cluster -> {
+
+            final List<String> argsToBeModified = Arrays.asList( new ArgumentsBuilder().add(params.getCommandLine()).getArgsArray() );
+            final Path workingDirectory = MiniClusterUtils.getWorkingDir(cluster);
+
+            int idx = 0;
+
+            idx = argsToBeModified.indexOf("-I");
+            Path path = new Path(workingDirectory, "hdfs.bam");
+            File file = new File(argsToBeModified.get(idx+1));
+            cluster.getFileSystem().copyFromLocalFile(new Path(file.toURI()), path);
+            argsToBeModified.set(idx+1, path.toUri().toString());
+
+            idx = argsToBeModified.indexOf("--kmers-to-ignore");
+            path = new Path(workingDirectory, "dummy.kill.kmers");
+            file = new File(argsToBeModified.get(idx+1));
+            cluster.getFileSystem().copyFromLocalFile(new Path(file.toURI()), path);
+            argsToBeModified.set(idx+1, path.toUri().toString());
+
+            // outputs, prefix with hdfs address
+            idx = argsToBeModified.indexOf("-O");
+            path = new Path(workingDirectory, "assemblies.sam");
+            argsToBeModified.set(idx+1, path.toUri().toString());
+
+            idx = argsToBeModified.indexOf("--breakpoint-intervals");
+            path = new Path(workingDirectory, "intervals");
+            argsToBeModified.set(idx+1, path.toUri().toString());
+
+            idx = argsToBeModified.indexOf("--fastq-dir");
+            path = new Path(workingDirectory, "fastq");
+            argsToBeModified.set(idx+1, path.toUri().toString());
+
+            idx = argsToBeModified.indexOf("--sv-evidence-filter-type");
+            argsToBeModified.set(idx+1, "XGBOOST");
+
+
+            new IntegrationTestSpec(String.join(" ", argsToBeModified), SVIntegrationTestDataProvider.dummyExpectedFileNames)
+                    .executeTest("testFindBreakpointEvidenceSparkRunnableXGBoostMiniCluster-", this);
         });
     }
 }
