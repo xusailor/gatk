@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMReadGroupRecord;
-import net.bytebuddy.pool.TypePool;
 import org.apache.spark.api.java.JavaDoubleRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -15,12 +14,9 @@ import org.broadinstitute.hellbender.engine.spark.SparkContextFactory;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.tools.spark.sv.StructuralVariationDiscoveryArgumentCollection;
 import org.broadinstitute.hellbender.tools.spark.utils.IntHistogram;
-import org.broadinstitute.hellbender.utils.IntHistogramTest;
 import org.broadinstitute.hellbender.utils.read.ArtificialReadUtils;
-import org.json4s.jackson.Json;
-import org.junit.Assert;
+import org.testng.AssertJUnit;
 import org.testng.annotations.Test;
-import scala.tools.ant.sabbus.Break;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -87,7 +83,7 @@ public class XGBoostEvidenceFilterUnitTest extends GATKBaseTest {
     @Test(groups = "sv")
     protected void testLocalXGBoostClassifierAccuracy() {
         // check accuracy: predictions are same as classifierAccuracyData up to tolerance
-        Assert.assertArrayEquals("Probabilities predicted by classifier do not match saved correct answers",
+        AssertJUnit.assertArrayEquals("Probabilities predicted by classifier do not match saved correct answers",
                 predictYProbaSerial, classifierAccuracyData.yProba, probabilityTol);
     }
 
@@ -105,7 +101,7 @@ public class XGBoostEvidenceFilterUnitTest extends GATKBaseTest {
         final double[] predictYProbaSpark = predictYProbaRdd.collect()
                 .stream().mapToDouble(Double::doubleValue).toArray();
         // check probabilities from spark are identical to serial
-        Assert.assertArrayEquals("Probabilities predicted in spark context differ from serial",
+        AssertJUnit.assertArrayEquals("Probabilities predicted in spark context differ from serial",
                 predictYProbaSpark, predictYProbaSerial, 0.0);
     }
 
@@ -115,7 +111,7 @@ public class XGBoostEvidenceFilterUnitTest extends GATKBaseTest {
         final Predictor resourcePredictor = XGBoostEvidenceFilter.loadPredictor(resourceClassifierModelFile);
         final double[] resourceYProba = predictProba(resourcePredictor, classifierAccuracyData.features);
         // check that predictions from resource are identical to local
-        Assert.assertArrayEquals("Predictions via loading predictor from resource is not identical to local file",
+        AssertJUnit.assertArrayEquals("Predictions via loading predictor from resource is not identical to local file",
                 resourceYProba, predictYProbaSerial, 0.0);
     }
 
@@ -129,10 +125,10 @@ public class XGBoostEvidenceFilterUnitTest extends GATKBaseTest {
             final EvidenceFeatures fVec = featuresTestData.features[ind];
             final BreakpointEvidence evidence = BreakpointEvidence.fromStringRep(stringRep, readMetadata);
             final String convertedRep = evidence.stringRep(readMetadata, params.minEvidenceMapQ);
-            Assert.assertEquals("BreakpointEvidence.fromStringRep does not invert BreakpointEvidence.stringRep",
+            AssertJUnit.assertEquals("BreakpointEvidence.fromStringRep does not invert BreakpointEvidence.stringRep",
                     stringRep.trim(), convertedRep.trim());
             final EvidenceFeatures calcFVec = evidenceFilter.getFeatures(evidence);
-            Assert.assertArrayEquals("Features calculated by XGBoostEvidenceFilter don't match expected features",
+            AssertJUnit.assertArrayEquals("Features calculated by XGBoostEvidenceFilter don't match expected features",
                     fVec.getValues(), calcFVec.getValues(), featuresTol);
         }
     }
@@ -155,7 +151,7 @@ public class XGBoostEvidenceFilterUnitTest extends GATKBaseTest {
         final List<BreakpointEvidence> passedEvidence = new ArrayList<>();
         evidenceFilter.forEachRemaining(passedEvidence::add);
 
-        Assert.assertEquals("Evidence passed by XGBoostEvidenceFilter not the same as expected",
+        AssertJUnit.assertEquals("Evidence passed by XGBoostEvidenceFilter not the same as expected",
                 expectedPassed, passedEvidence);
     }
 
