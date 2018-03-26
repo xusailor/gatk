@@ -567,6 +567,7 @@ public final class GenomicsDBImport extends GATKTool {
         final List<String> sampleNames = new ArrayList<>(sampleNametoPath.keySet());
         for(int i = lowerSampleIndex; i < sampleNametoPath.size() && i < lowerSampleIndex+batchSize; ++i) {
             final String sampleName = sampleNames.get(i);
+            logger.info("GenomicsDBImport.getFeatureReadersInParallel index " + i + " has sample name " + sampleName);
             futures.put(sampleName, inputPreloadExecutorService.submit(() -> {
                 final Path variantPath = sampleNametoPath.get(sampleName);
                 try {
