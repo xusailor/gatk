@@ -13,12 +13,15 @@ import htsjdk.variant.variantcontext.VariantContextBuilder;
 import htsjdk.variant.vcf.VCFCodec;
 import htsjdk.variant.vcf.VCFHeader;
 import org.broadinstitute.hellbender.CommandLineProgramTest;
+import org.broadinstitute.hellbender.Main;
 import org.broadinstitute.hellbender.tools.genomicsdb.GenomicsDBConstants;
 import org.broadinstitute.hellbender.tools.genomicsdb.GenomicsDBImport;
 import org.broadinstitute.hellbender.utils.IntervalUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
+import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.test.ArgumentsBuilder;
 import org.broadinstitute.hellbender.utils.test.BaseTest;
+import org.broadinstitute.hellbender.utils.test.GenomicsDBTestUtils;
 import org.broadinstitute.hellbender.utils.test.VariantContextTestUtils;
 import org.broadinstitute.hellbender.utils.variant.GATKVariantContextUtils;
 import org.testng.Assert;
@@ -30,6 +33,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 import static org.testng.Assert.*;
@@ -154,13 +158,31 @@ public class MakeVQSRinputIntegrationTest extends CommandLineProgramTest {
 
 
     @Test (dataProvider = "VCFdata")
-    public void testUsingGenomicsDB() throws IOException {
+    public void testUsingGenomicsDB(List<File> inputs, File expected, List<String> additionalArguments, BiConsumer<VariantContext, VariantContext> assertion, String reference) throws IOException {
         final String workspace = createTempDir("genomicsdb-tests-").getAbsolutePath() + "/workspace";
+        final File tempGenomicsDB = GenomicsDBTestUtils.createTempGenomicsDB(inputs, interval);
+        final String genomicsDBUri = GenomicsDBTestUtils.makeGenomicsDBUri(tempGenomicsDB);
 
-        writeToGenomicsDB(vcfInputs, interval, workspace, 0, false, 0, 1);
-        checkJSONFilesAreWritten(workspace);
-        File expectedCombinedVCF = runCombineGVCFs(vcfInputs, interval, b38_reference_20_21, CombineGVCFArgs);
+        File expectedCombinedVCF = runTool(genomicsDBUri, interval, b38_reference_20_21, CombineGVCFArgs);
         checkGenomicsDBAgainstExpected(workspace, interval, expectedCombinedVCF.getAbsolutePath(), b38_reference_20_21, true);
+    }
+
+    protected File runTool(String input, String interval, String reference, List<String> additionalArguments) {
+        final File output = createTempFile("genotypegvcf", ".vcf");
+
+        final ArgumentsBuilder args = new ArgumentsBuilder();
+        args.addReference(new File(reference))
+        .addArgument("V", input);
+        args.addOutput(output);
+
+        additionalArguments.forEach(args::add);
+
+        new Main().instanceMain(makeCommandLineArgs(args.getArgsList(), "MakeVQSRinput"));
+
+
+        final List<VariantContext> expectedVC = getVariantContexts(expected);
+        final List<VariantContext> actualVC = getVariantContexts(output);
+        assertForEachElementInLists(actualVC, expectedVC, assertion);
     }
 
 }
