@@ -255,10 +255,10 @@ public class VariantRecalibratorIntegrationTest extends CommandLineProgramTest {
                         " --resource hapmap,known=false,training=true,truth=true,prior=15:" + inputFile +
                         " -an FS -an ReadPosRankSum -an MQ -an MQRankSum -an QD -an SOR" +
                         " --output %s" +
-                        " -tranchesFile %s" +
-                        " --input_model " + exacModelReportFilename +
-                        " --addOutputVCFCommandLine false" +
-                        " -ignoreAllFilters -mode SNP",
+                        " -tranches-file %s" +
+                        " --input-model " + exacModelReportFilename +
+                        " --add-output-vcf-command-line false" +
+                        " -ignore-all-filters -mode SNP",
                 Arrays.asList(
                         annoOrderRecal,
                         annoOrderTranches));
@@ -272,10 +272,10 @@ public class VariantRecalibratorIntegrationTest extends CommandLineProgramTest {
                         " --resource hapmap,known=false,training=true,truth=true,prior=15:" + inputFile +
                         " -an ReadPosRankSum -an MQ -an MQRankSum -an QD -an SOR -an FS" +
                         " --output %s" +
-                        " -tranchesFile %s" +
-                        " --input_model " + exacModelReportFilename +
-                        " --addOutputVCFCommandLine false" +
-                        " -ignoreAllFilters -mode SNP",
+                        " -tranches-file %s" +
+                        " --input-model " + exacModelReportFilename +
+                        " --add-output-vcf-command-line false" +
+                        " -ignore-all-filters -mode SNP",
                 Arrays.asList(
                         annoOrderRecal,
                         annoOrderTranches));
