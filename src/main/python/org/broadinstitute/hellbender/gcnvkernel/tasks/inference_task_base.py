@@ -17,6 +17,7 @@ from ..inference import fancy_optimizers
 from ..inference.convergence_tracker import NoisyELBOConvergenceTracker
 from ..inference.deterministic_annealing import ADVIDeterministicAnnealing
 from ..inference.param_tracker import VariationalParameterTrackerConfig, VariationalParameterTracker
+from ..io import io_commons
 from ..models.fancy_model import GeneralizedContinuousModel
 
 _logger = logging.getLogger(__name__)
@@ -534,6 +535,9 @@ class HybridInferenceTask(InferenceTask):
                         self.calling_task_name, self.hybrid_inference_params.max_calling_iters))
 
         return first_call_converged
+
+    def save_elbo_history(self, output_file):
+        io_commons.write_ndarray_to_tsv(output_file, np.asarray(self.elbo_hist), write_shape_info=False)
 
 
 class HybridInferenceParameters:
