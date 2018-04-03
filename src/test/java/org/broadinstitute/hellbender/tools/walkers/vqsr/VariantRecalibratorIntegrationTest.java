@@ -248,7 +248,8 @@ public class VariantRecalibratorIntegrationTest extends CommandLineProgramTest {
     public void testVQSRAnnotationOrder() throws IOException {
         final String inputFile = publicTestDir + "/oneSNP.vcf";
 
-        // We don't actually need resources because we are using a serialized model, so we just pass input as resource to prevent a crash
+        // We don't actually need resources because we are using a serialized model,
+        // so we just pass input as resource to prevent a crash
         final IntegrationTestSpec spec = new IntegrationTestSpec(
                 " --variant " + inputFile +
                         " -L 1:110201699" +
