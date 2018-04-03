@@ -347,6 +347,8 @@ class HybridInferenceTask(InferenceTask):
                 self.i_epoch += 1
                 if all_converged and not self._premature_convergence():
                     break
+                else:  # reset ADVI convergence tracker so that ADVI is run again
+                    self.advi_convergence_tracker.reset_convergence_counter()
             if all_converged:
                 _logger.info("Inference task completed successfully and convergence achieved.")
             else:
