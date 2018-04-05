@@ -128,6 +128,9 @@ public class XGBoostEvidenceFilterUnitTest extends GATKBaseTest {
             AssertJUnit.assertEquals("BreakpointEvidence.fromStringRep does not invert BreakpointEvidence.stringRep",
                     stringRep.trim(), convertedRep.trim());
             final EvidenceFeatures calcFVec = evidenceFilter.getFeatures(evidence);
+            if(Math.abs(fVec.getValues()[0] - calcFVec.getValues()[0]) > featuresTol) {
+                final int stupid = 1;
+            }
             AssertJUnit.assertArrayEquals("Features calculated by XGBoostEvidenceFilter don't match expected features",
                     fVec.getValues(), calcFVec.getValues(), featuresTol);
         }

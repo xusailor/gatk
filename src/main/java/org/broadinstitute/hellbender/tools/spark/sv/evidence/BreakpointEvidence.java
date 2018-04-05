@@ -113,7 +113,7 @@ public class BreakpointEvidence {
 
         final String evidenceType = words[2];
         if(evidenceType.equals("TemplateSizeAnomaly")) {
-            final int readCount = Integer.parseInt(words[3]);
+            final int readCount = Integer.parseInt(words[4]);
             return new TemplateSizeAnomaly(location, weight, readCount);
         } else {
             final List<StrandedInterval> distalTargets = words[3].isEmpty() ? new ArrayList<>()
