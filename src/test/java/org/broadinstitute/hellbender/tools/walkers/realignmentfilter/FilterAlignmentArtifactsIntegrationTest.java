@@ -47,7 +47,6 @@ public class FilterAlignmentArtifactsIntegrationTest extends CommandLineProgramT
         final String[] args = {
                 "-I", tumorBam.getAbsolutePath(),
                 "-V", falseNegatives.getAbsolutePath(),
-                "-L", "1", "-L", "2", "-L", "3", "-L", "4",
                 "--bwa-mem-index-image", "/Users/davidben/Desktop/bwa_mem_hg_38/Homo_sapiens_assembly38.index_bundle",
                 "-O", filteredVcf.getAbsolutePath()
         };
