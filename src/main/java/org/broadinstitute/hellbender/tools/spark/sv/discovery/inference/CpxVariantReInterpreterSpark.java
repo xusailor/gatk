@@ -1,10 +1,12 @@
 package org.broadinstitute.hellbender.tools.spark.sv.discovery.inference;
 
+import com.google.common.collect.Sets;
 import htsjdk.samtools.SAMSequenceDictionary;
 import htsjdk.variant.variantcontext.Allele;
 import htsjdk.variant.variantcontext.VariantContext;
 import htsjdk.variant.variantcontext.VariantContextBuilder;
 import htsjdk.variant.vcf.VCFConstants;
+import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -155,6 +157,7 @@ public class CpxVariantReInterpreterSpark extends GATKSparkTool {
                     final int altSeqLength = vc.getAttributeAsString(GATKSVVCFConstants.SEQ_ALT_HAPLOTYPE, "").length() - 1;
                     final VariantContextBuilder vcBuilderForIns = new VariantContextBuilder()
                             .chr(vc.getContig()).start(vc.getStart()).stop(vc.getStart())
+                            .id(makeIDForIns(vc.getContig(), vc.getStart(), vc.getStart()))
                             .alleles(Arrays.asList(anchorBaseRefAllele, altSymbAlleleIns))
                             .attribute(GATKSVVCFConstants.SVTYPE, SimpleSVType.TYPES.INS.name())
                             .attribute(GATKSVVCFConstants.SVLEN, altSeqLength)
@@ -219,6 +222,7 @@ public class CpxVariantReInterpreterSpark extends GATKSparkTool {
                 if ( segmentSize > 49 ) {
                     final VariantContextBuilder vcBuilderForDel = new VariantContextBuilder()
                             .chr(refSegment.getContig()).start(refSegment.getStart()).stop(refSegment.getEnd())
+                            .id(makeIDForDel(refSegment))
                             .alleles(Arrays.asList(anchorBaseRefAllele, altSymbAlleleDel))
                             .attribute(GATKSVVCFConstants.SVTYPE, SimpleSVType.TYPES.DEL.name())
                             .attribute(GATKSVVCFConstants.SVLEN, -segmentSize)
@@ -232,6 +236,7 @@ public class CpxVariantReInterpreterSpark extends GATKSparkTool {
                     if (segmentSize > 49) {
                         final VariantContextBuilder vcBuilderForIns = new VariantContextBuilder()
                                 .chr(vc.getContig()).start(vc.getStart()).stop(vc.getStart())
+                                .id(makeIDForIns(vc.getContig(), vc.getStart(), vc.getStart()))
                                 .alleles(Arrays.asList(anchorBaseRefAllele, altSymbAlleleIns))
                                 .attribute(GATKSVVCFConstants.SVTYPE, SimpleSVType.TYPES.INS.name())
                                 .attribute(GATKSVVCFConstants.SVLEN, altSeqLength)
@@ -242,6 +247,7 @@ public class CpxVariantReInterpreterSpark extends GATKSparkTool {
                     } else { // fat insertion
                         final VariantContextBuilder vcBuilderForIns = new VariantContextBuilder()
                                 .chr(refSegment.getContig()).start(refSegment.getStart()).stop(refSegment.getEnd())
+                                .id(makeIDForIns(refSegment.getContig(), refSegment.getStart(), refSegment.getEnd()))
                                 .alleles(Arrays.asList(fatInsertionRefAllele, altSymbAlleleIns))
                                 .attribute(GATKSVVCFConstants.SVTYPE, SimpleSVType.TYPES.INS.name())
                                 .attribute(GATKSVVCFConstants.SVLEN, altSeqLength)
@@ -255,6 +261,7 @@ public class CpxVariantReInterpreterSpark extends GATKSparkTool {
                 if (segmentSize > 49) {
                     final VariantContextBuilder vcBuilderForInv = new VariantContextBuilder()
                             .chr(refSegment.getContig()).start(refSegment.getStart()).stop(refSegment.getEnd())
+                            .id(makeIDForInv(refSegment))
                             .alleles(Arrays.asList(anchorBaseRefAllele, altSymbAlleleInv))
                             .attribute(GATKSVVCFConstants.SVTYPE, SimpleSVType.TYPES.INV.name())
                             .attribute(GATKSVVCFConstants.SVLEN, 0) // per VCF spec, INV should have 0 length
@@ -266,6 +273,7 @@ public class CpxVariantReInterpreterSpark extends GATKSparkTool {
                     if ( altSeqLength - segmentSize > 49 ) {
                         final VariantContextBuilder vcBuilderForIns = new VariantContextBuilder()
                                 .chr(vc.getContig()).start(vc.getStart()).stop(vc.getStart())
+                                .id(makeIDForIns(vc.getContig(), vc.getStart(), vc.getStart()))
                                 .alleles(Arrays.asList(anchorBaseRefAllele, altSymbAlleleIns))
                                 .attribute(GATKSVVCFConstants.SVTYPE, SimpleSVType.TYPES.INS.name())
                                 .attribute(GATKSVVCFConstants.SVLEN, altSeqLength - segmentSize)
@@ -277,6 +285,7 @@ public class CpxVariantReInterpreterSpark extends GATKSparkTool {
                 } else if ( altSeqLength > 49 ){ // ref segment replace with fat INS (because the ref segment is not long enough to merit a deletion)
                     final VariantContextBuilder vcBuilderForIns = new VariantContextBuilder()
                             .chr(refSegment.getContig()).start(refSegment.getStart()).stop(refSegment.getEnd())
+                            .id(makeIDForIns(refSegment.getContig(), refSegment.getStart(), refSegment.getEnd()))
                             .alleles(Arrays.asList(fatInsertionRefAllele, altSymbAlleleIns))
                             .attribute(GATKSVVCFConstants.SVTYPE, SimpleSVType.TYPES.INS.name())
                             .attribute(GATKSVVCFConstants.SVLEN, altSeqLength)
@@ -289,10 +298,11 @@ public class CpxVariantReInterpreterSpark extends GATKSparkTool {
         } else { // at least one "1", so no deletion can be emitted
             if (invertedAppearance == 0) {
                 if ( altSeqLength - segmentSize > 49 ) { // long enough net gain
-                    // distinguish between cases {"1", ....} and {.....,"1"} to know where to put the insertion
+                    // distinguish between cases {"1", ....}, {.....,"1"}, and {.....,"1", ....} to know where to put the insertion
                     if (altArrangement.get(altArrangement.size() - 1).equals("1")) {
                         final VariantContextBuilder vcBuilderForIns = new VariantContextBuilder()
                                 .chr(vc.getContig()).start(vc.getStart()).stop(vc.getStart())
+                                .id(makeIDForIns(vc.getContig(), vc.getStart(), vc.getStart()))
                                 .alleles(Arrays.asList(anchorBaseRefAllele, altSymbAlleleIns))
                                 .attribute(GATKSVVCFConstants.SVTYPE, SimpleSVType.TYPES.INS.name())
                                 .attribute(GATKSVVCFConstants.SVLEN, altSeqLength - segmentSize)
@@ -303,6 +313,7 @@ public class CpxVariantReInterpreterSpark extends GATKSparkTool {
                     } else if (altArrangement.get(0).equals("1")) {
                         final VariantContextBuilder vcBuilderForIns = new VariantContextBuilder()
                                 .chr(vc.getContig()).start(vc.getStart()).stop(vc.getStart())
+                                .id(makeIDForIns(vc.getContig(), vc.getStart(), vc.getStart()))
                                 .alleles(Arrays.asList(anchorBaseRefAllele, altSymbAlleleIns))
                                 .attribute(GATKSVVCFConstants.SVTYPE, SimpleSVType.TYPES.INS.name())
                                 .attribute(GATKSVVCFConstants.SVLEN, altSeqLength - segmentSize)
@@ -310,12 +321,23 @@ public class CpxVariantReInterpreterSpark extends GATKSparkTool {
                                 .attribute(GATKSVVCFConstants.CONTIG_NAMES, evidenceContigs);
                         final VariantContext ins = vcBuilderForIns.make();
                         result.add(ins);
+                    } else {
+                        // find first index of "1" entry, collect new insertion length before that, then collect new bases length after that
+                        final int idxFirstMatch = altArrangement.indexOf("1");
+                        final VariantContext frontIns = getFrontIns(vc, evidenceContigs, altArrangement, anchorBaseRefAllele, altSymbAlleleIns, idxFirstMatch);
+                        result.add(frontIns);
+
+                        final byte[] refBases = vc.getReference().getBases();
+                        final Allele anchorBaseRefAlleleRear = Allele.create(refBases[refBases.length - 1], true);
+                        final VariantContext rearIns = getRearIns(vc, evidenceContigs, altArrangement, anchorBaseRefAlleleRear, altSymbAlleleIns, idxFirstMatch);
+                        result.add(rearIns);
                     }
                 }
             } else {
                 if (segmentSize > 49) { // segment inverted long enough to warrant an inversion
                     final VariantContextBuilder vcBuilderForInv = new VariantContextBuilder()
                             .chr(refSegment.getContig()).start(refSegment.getStart()).stop(refSegment.getEnd())
+                            .id(makeIDForIns(refSegment.getContig(), refSegment.getStart(), refSegment.getEnd()))
                             .alleles(Arrays.asList(anchorBaseRefAllele, altSymbAlleleInv))
                             .attribute(GATKSVVCFConstants.SVTYPE, SimpleSVType.TYPES.INV.name())
                             .attribute(GATKSVVCFConstants.SVLEN, 0) // per VCF spec, INV should have 0 length
@@ -327,6 +349,7 @@ public class CpxVariantReInterpreterSpark extends GATKSparkTool {
                     if ( altSeqLength - segmentSize > 49 ) {
                         final VariantContextBuilder vcBuilderForIns = new VariantContextBuilder()
                                 .chr(vc.getContig()).start(vc.getStart()).stop(vc.getStart())
+                                .id(makeIDForIns(vc.getContig(), vc.getStart(), vc.getStart()))
                                 .alleles(Arrays.asList(anchorBaseRefAllele, altSymbAlleleIns))
                                 .attribute(GATKSVVCFConstants.SVTYPE, SimpleSVType.TYPES.INS.name())
                                 .attribute(GATKSVVCFConstants.SVLEN, altSeqLength - segmentSize)
@@ -338,6 +361,7 @@ public class CpxVariantReInterpreterSpark extends GATKSparkTool {
                 } else if ( altSeqLength - segmentSize > 49 ) { // inverted segment not long enough for an inversion call
                     final VariantContextBuilder vcBuilderForIns = new VariantContextBuilder()
                             .chr(vc.getContig()).start(vc.getStart()).stop(vc.getStart())
+                            .id(makeIDForIns(vc.getContig(), vc.getStart(), vc.getStart()))
                             .alleles(Arrays.asList(anchorBaseRefAllele, altSymbAlleleIns))
                             .attribute(GATKSVVCFConstants.SVTYPE, SimpleSVType.TYPES.INS.name())
                             .attribute(GATKSVVCFConstants.SVLEN, altSeqLength - segmentSize)
@@ -362,24 +386,27 @@ public class CpxVariantReInterpreterSpark extends GATKSparkTool {
     private static List<VariantContext> reInterpretMultiSegmentsCalls(final Stream<VariantContext> multiSegmentCalls,
                                                                       final SvDiscoveryInputData svDiscoveryInputData) {
 
-        final Tuple2<Stream<VariantContext>, Set<VariantContext>> acceptedSimpleVariantsAndRejectedComplex =
-                pairIterationWayOfReInterpretation(multiSegmentCalls, svDiscoveryInputData);
+        final List<VariantContext> collect = multiSegmentCalls.collect(Collectors.toList());
         final ReferenceMultiSource reference = svDiscoveryInputData.inputMetaData.referenceBroadcast.getValue();
-        return Stream.concat(
-                acceptedSimpleVariantsAndRejectedComplex._1,
-                acceptedSimpleVariantsAndRejectedComplex._2.stream().flatMap(vc -> workerForMultiSegmentsCalls(vc, reference)))
-                .collect(Collectors.toList());
+        final Stream<VariantContext> oneSource = pairIterationWayOfReInterpretation(collect, svDiscoveryInputData);
+        final Stream<VariantContext> concat = Stream.concat(
+                oneSource,
+                collect.stream().flatMap(vc -> workerForMultiSegmentsCalls(vc, reference))
+        );
+
+        return removeDuplicates(concat);
     }
+
 
     /**
      * Get contigs who triggered multi-segment calls,
      * create a map from their read name to the corresponding CPX variant,
      * then collect their alignments for sending them through the pair-iteration-ed way of re-interpretation.
      */
-    private static Tuple2<Stream<VariantContext>, Set<VariantContext>> pairIterationWayOfReInterpretation(final Stream<VariantContext> multiSegmentCalls,
-                                                                                                          final SvDiscoveryInputData svDiscoveryInputData) {
+    private static Stream<VariantContext> pairIterationWayOfReInterpretation(final List<VariantContext> multiSegmentCalls,
+                                                                             final SvDiscoveryInputData svDiscoveryInputData) {
 
-        final Map<String, VariantContext> contigNameToCpxVariant = multiSegmentCalls
+        final Map<String, VariantContext> contigNameToCpxVariant = multiSegmentCalls.stream()
                 .flatMap(vc -> makeSureAttributeIsList(vc, GATKSVVCFConstants.CONTIG_NAMES).stream().map(s -> new Tuple2<>(s, vc)))
                 .collect(Collectors.toMap(pair -> pair._1, pair -> pair._2));
 
@@ -401,7 +428,7 @@ public class CpxVariantReInterpreterSpark extends GATKSparkTool {
                         .discoverVariantsFromChimeras(filteredData.inputMetaData, analysisReadyContigs);
 
         // collect those CPX variants whose re-interpretation from above would be rejected, then re-interpret with workerForMultiSegmentsCalls()
-        final Stream<VariantContext> result = reInterpreted
+        final Stream<VariantContext> consistent = reInterpreted
                 .stream()
                 .map(simpleVC -> {
                     final List<String> consistentComplexVariantIDs =
@@ -416,20 +443,14 @@ public class CpxVariantReInterpreterSpark extends GATKSparkTool {
                         return new VariantContextBuilder(simpleVC)
                                 .attribute(EVENT_KEY,
                                         String.join(VCFConstants.INFO_FIELD_ARRAY_SEPARATOR, consistentComplexVariantIDs))
+                                .id(simpleVC.getID() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR +
+                                        CPX_DERIVED)
                                 .make();
                     }
                 })
                 .filter(Objects::nonNull);
 
-        final Set<VariantContext> complexVariantsWithRejectedSimpleInterpretations =
-                reInterpreted.stream()
-                        .flatMap(simpleVC ->
-                                makeSureAttributeIsList(simpleVC, GATKSVVCFConstants.CONTIG_NAMES).stream()
-                                        .map(contigNameToCpxVariant::get)
-                                        .filter( cpx -> !isConsistentWithCPX(simpleVC, cpx))
-                        )
-                        .collect(Collectors.toSet());
-        return new Tuple2<>(result, complexVariantsWithRejectedSimpleInterpretations);
+        return consistent;
     }
 
     /**
@@ -528,6 +549,7 @@ public class CpxVariantReInterpreterSpark extends GATKSparkTool {
                                     final byte[] ref = reference.getReferenceBases(new SimpleInterval(segment.getContig(), segment.getStart(), segment.getStart())).getBases();
                                     return new VariantContextBuilder()
                                             .chr(segment.getContig()).start(segment.getStart()).stop(segment.getEnd())
+                                            .id(makeIDForInv(segment))
                                             .alleles(Arrays.asList(
                                                     Allele.create(ref, true),
                                                     Allele.create(SimpleSVType.createBracketedSymbAlleleString(GATKSVVCFConstants.SYMB_ALT_ALLELE_INV)))
@@ -556,6 +578,7 @@ public class CpxVariantReInterpreterSpark extends GATKSparkTool {
                                     final byte[] ref = reference.getReferenceBases(new SimpleInterval(segment.getContig(), segment.getStart(), segment.getStart())).getBases();
                                     return new VariantContextBuilder()
                                             .chr(segment.getContig()).start(segment.getStart()).stop(segment.getEnd())
+                                            .id(makeIDForDel(segment))
                                             .alleles(Arrays.asList(
                                                     Allele.create(ref, true),
                                                     Allele.create(SimpleSVType.createBracketedSymbAlleleString(GATKSVVCFConstants.SYMB_ALT_ALLELE_DEL)))
@@ -574,7 +597,46 @@ public class CpxVariantReInterpreterSpark extends GATKSparkTool {
             );
         }
 
+        // head and tail insertions only
+        final List<String> altArrangement = makeSureAttributeIsList(complexVC, GATKSVVCFConstants.CPX_EVENT_ALT_ARRANGEMENTS);
+        final byte[] refBases = complexVC.getReference().getBases();
+        final Allele altSymbAlleleIns = Allele.create(SimpleSVType.createBracketedSymbAlleleString(GATKSVVCFConstants.SYMB_ALT_ALLELE_INS));
+        int idx = -1;
+        for (final String description : altArrangement) {
+            if ( descriptionIndicatesInsertion(description)) {
+                ++idx;
+            } else {
+                break;
+            }
+        }
+        if (idx >= 0) {
+            ++idx;
+            final Allele anchorBaseRefAlleleFront = Allele.create(refBases[0], true);
+            result.add( getFrontIns(complexVC, evidenceContigs, altArrangement, anchorBaseRefAlleleFront, altSymbAlleleIns, idx) );
+        }
+
+        idx = altArrangement.size();
+        for (int i = altArrangement.size() - 1; i > -1 ; --i) {
+            if ( descriptionIndicatesInsertion(altArrangement.get(i))) {
+                --idx;
+            } else {
+                break;
+            }
+        }
+
+        if (idx != altArrangement.size()) {
+            --idx;
+            final Allele anchorBaseRefAlleleRear = Allele.create(refBases[refBases.length-1], true);
+            result.add( getRearIns(complexVC, evidenceContigs, altArrangement, anchorBaseRefAlleleRear, altSymbAlleleIns, idx) );
+        }
+
         return result.stream();
+    }
+
+    private static boolean descriptionIndicatesInsertion(final String description) {
+        if (description.startsWith(CpxVariantCanonicalRepresentation.UNMAPPED_INSERTION))
+            return true;
+        return !NumberUtils.isCreatable(description); // "(-)?[0-9]+" is describing segments, we don't count them as insertions
     }
 
     /**
@@ -596,6 +658,146 @@ public class CpxVariantReInterpreterSpark extends GATKSparkTool {
                     }
                 });
         return new Tuple2<>(presentSegments, invertedSegments);
+    }
+
+    //==================================================================================================================
+    private static VariantContext getFrontIns(final VariantContext vc,
+                                              final List<String> evidenceContigs,
+                                              final List<String> altArrangement,
+                                              final Allele anchorBaseRefAllele,
+                                              final Allele altSymbAlleleIns,
+                                              final int idxFirstMatch) {
+        int insLen = 0;
+        for (int i = 0; i < idxFirstMatch; ++i) {
+            final String description = altArrangement.get(i);
+            insLen += getInsLen(description);
+        }
+
+        final VariantContextBuilder vcBuilderForFrontIns = new VariantContextBuilder()
+                .chr(vc.getContig()).start(vc.getStart()).stop(vc.getStart())
+                .id(makeIDForIns(vc.getContig(), vc.getStart(), vc.getStart()))
+                .alleles(Arrays.asList(anchorBaseRefAllele, altSymbAlleleIns))
+                .attribute(GATKSVVCFConstants.SVTYPE, SimpleSVType.TYPES.INS.name())
+                .attribute(GATKSVVCFConstants.SVLEN, insLen)
+                .attribute(VCFConstants.END_KEY, vc.getStart())
+                .attribute(EVENT_KEY, vc.getID())
+                .attribute(GATKSVVCFConstants.CONTIG_NAMES, evidenceContigs);
+        return vcBuilderForFrontIns.make();
+    }
+
+    private static VariantContext getRearIns(final VariantContext vc,
+                                             final List<String> evidenceContigs,
+                                             final List<String> altArrangement,
+                                             final Allele anchorBaseRefAllele,
+                                             final Allele altSymbAlleleIns,
+                                             final int idxFirstMatch) {
+        int insLen = 0;
+        for (int i = idxFirstMatch + 1; i < altArrangement.size(); ++i) {
+            insLen += getInsLen( altArrangement.get(i) );
+        }
+
+        final VariantContextBuilder vcBuilderForRearIns = new VariantContextBuilder()
+                .chr(vc.getContig()).start(vc.getEnd()).stop(vc.getEnd())
+                .id(makeIDForIns(vc.getContig(), vc.getEnd(), vc.getEnd()))
+                .alleles(Arrays.asList(anchorBaseRefAllele, altSymbAlleleIns))
+                .attribute(GATKSVVCFConstants.SVTYPE, SimpleSVType.TYPES.INS.name())
+                .attribute(GATKSVVCFConstants.SVLEN, insLen)
+                .attribute(VCFConstants.END_KEY, vc.getEnd())
+                .attribute(EVENT_KEY, vc.getID())
+                .attribute(GATKSVVCFConstants.CONTIG_NAMES, evidenceContigs);
+        return vcBuilderForRearIns.make();
+    }
+
+    private static int getInsLen(final String description) {
+        if(description.startsWith(CpxVariantCanonicalRepresentation.UNMAPPED_INSERTION)) {
+            return Integer.valueOf( description.substring(CpxVariantCanonicalRepresentation.UNMAPPED_INSERTION.length() + 1) );
+        } else {
+            final int offset = description.startsWith("-") ? 1 : 0;
+            return new SimpleInterval (description.substring(offset) ).size();
+        }
+    }
+
+    private static List<VariantContext> removeDuplicates(final Stream<VariantContext> toBeDeDuplicated) {
+        // separate by types {DEL, INS, INV} and compare with same type
+        final List<VariantContext> deletions = new ArrayList<>();
+        final List<VariantContext> insertions = new ArrayList<>();
+        final List<VariantContext> inversions = new ArrayList<>();
+
+        toBeDeDuplicated.forEach(vc -> {
+            final String type = vc.getAttributeAsString(GATKSVVCFConstants.SVTYPE, "");
+            if(type.equals(SimpleSVType.TYPES.DEL.name())) {
+                deletions.add(vc);
+            } else if (type.equals(SimpleSVType.TYPES.INS.name())) {
+                insertions.add(vc);
+            } else {
+                inversions.add(vc);
+            }
+        });
+
+        final List<VariantContext> result = new ArrayList<>(deletions.size() + insertions.size() + inversions.size());
+        result.addAll(mergeSameVariants(deletions));
+        result.addAll(mergeSameVariants(insertions));
+        result.addAll(mergeSameVariants(inversions));
+
+        return result;
+    }
+
+    private static final class Annotation {
+        final String id;
+        final String type;
+        final int svlen;
+        final List<Allele> alleles;
+
+        final Set<String> sourceCPXids;
+        final Set<String> sourceTigs;
+
+        Annotation(final String id, final String type, final int svlen, final List<Allele> alleles, final Set<String> sourceCPXids, final Set<String> sourceTigs) {
+            this.id = id;
+            this.type = type;
+            this.svlen = svlen;
+            this.alleles = alleles;
+            this.sourceCPXids = sourceCPXids;
+            this.sourceTigs = sourceTigs;
+        }
+    }
+    private static List<VariantContext> mergeSameVariants(final List<VariantContext> vcs) {
+        final Map<SimpleInterval, Annotation> rangeToAnnotations = new HashMap<>();
+
+        for(final VariantContext vc : vcs) {
+            final SimpleInterval range = new SimpleInterval(vc.getContig(), vc.getStart(), vc.getEnd());
+            Annotation annotation = rangeToAnnotations.get(range);
+            if (annotation == null) {
+                rangeToAnnotations.put(
+                        range,
+                        new Annotation(vc.getID(),
+                                vc.getAttributeAsString(GATKSVVCFConstants.SVTYPE, ""),
+                                vc.getAttributeAsInt(GATKSVVCFConstants.SVLEN, 0),
+                                vc.getAlleles(),
+                                Sets.newHashSet(vc.getAttributeAsString(EVENT_KEY, "")),
+                                new HashSet<>( makeSureAttributeIsList(vc, GATKSVVCFConstants.CONTIG_NAMES)))
+                );
+            } else {
+                annotation.sourceCPXids.add(vc.getAttributeAsString(EVENT_KEY, ""));
+                annotation.sourceTigs.addAll(makeSureAttributeIsList(vc, GATKSVVCFConstants.CONTIG_NAMES));
+            }
+        }
+
+        final List<VariantContext> result = new ArrayList<>();
+        for (final Map.Entry<SimpleInterval, Annotation> entry: rangeToAnnotations.entrySet()) {
+            final SimpleInterval range = entry.getKey();
+            final Annotation annotation = entry.getValue();
+            final VariantContextBuilder builder = new VariantContextBuilder()
+                    .chr(range.getContig()).start(range.getStart()).stop(range.getEnd())
+                    .id(annotation.id)
+                    .alleles(annotation.alleles)
+                    .attribute(GATKSVVCFConstants.SVTYPE, annotation.type)
+                    .attribute(GATKSVVCFConstants.SVLEN, annotation.svlen)
+                    .attribute(VCFConstants.END_KEY, range.getEnd())
+                    .attribute(EVENT_KEY, String.join(VCFConstants.INFO_FIELD_ARRAY_SEPARATOR, annotation.sourceCPXids))
+                    .attribute(GATKSVVCFConstants.CONTIG_NAMES, String.join(VCFConstants.INFO_FIELD_ARRAY_SEPARATOR, annotation.sourceTigs));
+            result.add(builder.make());
+        }
+        return result;
     }
 
     //==================================================================================================================
@@ -624,5 +826,31 @@ public class CpxVariantReInterpreterSpark extends GATKSparkTool {
                     }
                 })
                 .collect(Collectors.toList());
+    }
+
+    private static final String CPX_DERIVED = "CPX_DERIVED";
+
+    private static String makeIDForDel(final SimpleInterval deletedRange) {
+        return SimpleSVType.TYPES.DEL.name() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
+                + deletedRange.getContig() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
+                + deletedRange.getStart() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
+                + deletedRange.getEnd() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR +
+                CPX_DERIVED;
+    }
+
+    private static String makeIDForIns(final String contig, final int start, final int end) {
+        return SimpleSVType.TYPES.INS.name() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
+                + contig + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
+                + start + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
+                + end + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR +
+                CPX_DERIVED;
+    }
+
+    private static String makeIDForInv(final SimpleInterval invertedRange) {
+        return "INVERSION" + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
+                + invertedRange.getContig() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
+                + invertedRange.getStart() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR
+                + invertedRange.getEnd() + GATKSVVCFConstants.INTERVAL_VARIANT_ID_FIELD_SEPARATOR +
+                CPX_DERIVED;
     }
 }
