@@ -1,9 +1,13 @@
 package org.broadinstitute.hellbender.tools.walkers.realignmentfilter;
 
+import htsjdk.variant.variantcontext.VariantContext;
 import org.broadinstitute.hellbender.CommandLineProgramTest;
+import org.broadinstitute.hellbender.engine.FeatureDataSource;
+import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
 import org.testng.annotations.Test;
 
 import java.io.File;
+import java.util.stream.StreamSupport;
 
 import static org.testng.Assert.*;
 
@@ -25,7 +29,6 @@ public class FilterAlignmentArtifactsIntegrationTest extends CommandLineProgramT
                 "-V", truthVcf.getAbsolutePath(),
                 "-L", "20",
                 "--bwa-mem-index-image", "/Users/davidben/Desktop/bwa_mem_hg_38/Homo_sapiens_assembly38.index_bundle",
-                "--min-realignment-mapping-quality", "10",
                 "-XL", mask.getAbsolutePath(),
                 "-O", filteredVcf.getAbsolutePath()
         };
@@ -44,11 +47,20 @@ public class FilterAlignmentArtifactsIntegrationTest extends CommandLineProgramT
         final String[] args = {
                 "-I", tumorBam.getAbsolutePath(),
                 "-V", falseNegatives.getAbsolutePath(),
+                "-L", "1", "-L", "2", "-L", "3", "-L", "4",
                 "--bwa-mem-index-image", "/Users/davidben/Desktop/bwa_mem_hg_38/Homo_sapiens_assembly38.index_bundle",
                 "-O", filteredVcf.getAbsolutePath()
         };
 
         runCommandLine(args);
+
+        final long numFailingFilter = StreamSupport.stream(new FeatureDataSource<VariantContext>(filteredVcf).spliterator(), false)
+                .filter(vc -> vc.getFilters().contains(GATKVCFConstants.ALIGNMENT_ARTIFACT_FILTER_NAME))
+                .count();
+        final long numPassingFilter = StreamSupport.stream(new FeatureDataSource<VariantContext>(filteredVcf).spliterator(), false)
+                .filter(vc -> !vc.getFilters().contains(GATKVCFConstants.ALIGNMENT_ARTIFACT_FILTER_NAME))
+                .count();
+        int j = 10;
     }
 
     @Test
@@ -65,5 +77,13 @@ public class FilterAlignmentArtifactsIntegrationTest extends CommandLineProgramT
         };
 
         runCommandLine(args);
+
+        final long numFailingFilter = StreamSupport.stream(new FeatureDataSource<VariantContext>(filteredVcf).spliterator(), false)
+                .filter(vc -> vc.getFilters().contains(GATKVCFConstants.ALIGNMENT_ARTIFACT_FILTER_NAME))
+                .count();
+        final long numPassingFilter = StreamSupport.stream(new FeatureDataSource<VariantContext>(filteredVcf).spliterator(), false)
+                .filter(vc -> !vc.getFilters().contains(GATKVCFConstants.ALIGNMENT_ARTIFACT_FILTER_NAME))
+                .count();
+        int j = 10;
     }
 }

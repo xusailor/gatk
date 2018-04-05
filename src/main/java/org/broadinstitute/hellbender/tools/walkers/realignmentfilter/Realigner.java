@@ -14,10 +14,14 @@ import java.util.stream.Collectors;
 public class Realigner {
     private final BwaMemAligner aligner;
     private final int maxReasonableFragmentLength;
+    private final int minAlignerScoreDifference;
+    private final int numberOfRegularContigs;
 
     public Realigner(final RealignmentArgumentCollection rfac) {
         final BwaMemIndex index = new BwaMemIndex(rfac.bwaMemIndexImage);
         maxReasonableFragmentLength = rfac.maxReasonableFragmentLength;
+        minAlignerScoreDifference = rfac.minAlignerScoreDifference;
+        numberOfRegularContigs = rfac.numRegularContigs;
         aligner = new BwaMemAligner(index);
         aligner.setMinSeedLengthOption(rfac.minSeedLength);
         aligner.setDropRatioOption((float) rfac.dropRatio);
@@ -27,7 +31,10 @@ public class Realigner {
 
     public RealignmentResult realign(final GATKRead read) {
         final List<BwaMemAlignment> alignments = aligner.alignSeqs(Arrays.asList(read), GATKRead::getBasesNoCopy).get(0);
-        return checkAlignments(alignments);
+
+        final List<BwaMemAlignment> nonAltAlignments = alignments.size() == 1 ? alignments :
+                alignments.stream().filter(a -> a.getRefId() < numberOfRegularContigs).collect(Collectors.toList());
+        return checkAlignments(nonAltAlignments);
     }
 
     public RealignmentResult checkAlignments(final List<BwaMemAlignment> alignments) {
@@ -35,24 +42,18 @@ public class Realigner {
             return new RealignmentResult(false, Collections.emptyList());
         } else if (alignments.get(0).getRefId() < 0) {
             return new RealignmentResult(false, alignments);
-        }
-
-
-        // TODO: THIS IS COMPLETELY WRONG
-        if (alignments.size() > 1) {
+        } else if (alignments.size() == 1) {
+            return new RealignmentResult(true, alignments);
+        } else {
+            final int scoreDifference = alignments.get(0).getAlignerScore() - alignments.get(1).getAlignerScore();
             //TODO: check difference between best and second best aligner score
-            return new RealignmentResult(false, alignments);
+            return new RealignmentResult(scoreDifference >= minAlignerScoreDifference, alignments);
         }
-
-
-        // TODO: perhaps check number of mismatches in second best alignment?
 
         // TODO: we need to check that contig is the same or equivalent up to hg38 alt contig
         // TODO: do this by looking at index.getReferenceContigNames() and bamHeader.getSequenceDictionary().getSequences()
         // TODO: in IDE and seeing what the correspondence could be
         // TODO: put in check that start position is within eg 10 Mb of original mapping
-
-        return new RealignmentResult(true, alignments);
     }
 
     public static class RealignmentResult {

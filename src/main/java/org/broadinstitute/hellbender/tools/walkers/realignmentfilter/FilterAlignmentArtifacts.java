@@ -10,7 +10,11 @@ import htsjdk.variant.vcf.VCFHeader;
 import htsjdk.variant.vcf.VCFHeaderLine;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.mutable.MutableInt;
-import org.broadinstitute.barclay.argparser.*;
+import org.apache.commons.math3.util.Pair;
+import org.broadinstitute.barclay.argparser.Argument;
+import org.broadinstitute.barclay.argparser.ArgumentCollection;
+import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
+import org.broadinstitute.barclay.argparser.ExperimentalFeature;
 import org.broadinstitute.barclay.help.DocumentedFeature;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.engine.FeatureContext;
@@ -27,10 +31,8 @@ import org.broadinstitute.hellbender.utils.variant.GATKVCFHeaderLines;
 import picard.cmdline.programgroups.VariantFilteringProgramGroup;
 
 import java.io.File;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * <p>Filter false positive alignment artifacts from a VCF callset.</p>
@@ -180,7 +182,23 @@ public class FilterAlignmentArtifacts extends VariantWalker {
                     // finally we check whether the pair maps uniquely even though the read and mate individually do not
                     final List<BwaMemAlignment> readRealignments = readRealignment.getRealignments();
                     final List<BwaMemAlignment> mateRealignments = mateRealignment.getRealignments();
-                    //TODO: do something here!!!
+                    final List<Pair<BwaMemAlignment, BwaMemAlignment>> plausiblePairs = readRealignments.stream()
+                            .flatMap(r -> mateRealignments.stream()
+                                    .filter(m -> m.getRefId() == r.getRefId() && Math.abs(m.getRefStart() - r.getRefStart()) < realignmentArgumentCollection.maxReasonableFragmentLength)
+                                    .map(m -> new Pair<BwaMemAlignment, BwaMemAlignment>(r,m)))
+                            .collect(Collectors.toList());
+
+                    if (plausiblePairs.size() <= 1) {
+                        succeededRealignmentCount.increment();
+                    } else {
+                        plausiblePairs.sort(Comparator.comparingInt(pair -> -pairScore(pair)) );
+                        final int scoreDiff = pairScore(plausiblePairs.get(0)) - pairScore(plausiblePairs.get(1));
+                        if (scoreDiff >= realignmentArgumentCollection.minAlignerScoreDifference) {
+                            succeededRealignmentCount.increment();
+                        } else {
+                            failedRealignmentCount.increment();
+                        }
+                    }
                 }
             } else {
                 failedRealignmentCount.increment();
@@ -198,6 +216,10 @@ public class FilterAlignmentArtifacts extends VariantWalker {
                 Trilean.of(failedRealignmentCount.intValue() <= succeededRealignmentCount.intValue());
 
         vcfWriter.add(passesFilter == Trilean.TRUE ? vc : new VariantContextBuilder(vc).filter(GATKVCFConstants.ALIGNMENT_ARTIFACT_FILTER_NAME).make());
+    }
+
+    private static int pairScore(final Pair<BwaMemAlignment, BwaMemAlignment> pair) {
+        return pair.getFirst().getAlignerScore() + pair.getSecond().getAlignerScore();
     }
 
     @Override

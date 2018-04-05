@@ -6,8 +6,10 @@ import org.broadinstitute.hellbender.tools.BwaMemIndexImageCreator;
 public class RealignmentArgumentCollection {
     public static final int DEFAULT_MIN_SEED_LENGTH = 20;
     public static final double DEFAULT_DROP_RATIO = 0.5;
-    public static final double DEFAULT_SEED_SPLIT_FACTOR = 1.2;
-    public static final int DEFAULT_MAX_REASONABLE_FRAGMENT_LENGTH = 10000;
+    public static final double DEFAULT_SEED_SPLIT_FACTOR = 1.0;
+    public static final int DEFAULT_MAX_REASONABLE_FRAGMENT_LENGTH = 100000;
+    public static final int DEFAULT_MIN_ALIGNER_SCORE_DIFFERENCE = 20;
+    public static final int DEFAULT_NUM_REGULAR_CONTIGS = 25;
 
     /**
      * BWA-mem index image created by {@link BwaMemIndexImageCreator}
@@ -24,8 +26,20 @@ public class RealignmentArgumentCollection {
     /**
      * Maximum fragment length to be considered a reasonable pair alignment
      */
-    @Argument(fullName = "max-reasonable-fragment-length", doc = "MAximum fragment length to be considered a reasonable pair alignment", optional = true)
+    @Argument(fullName = "max-reasonable-fragment-length", doc = "Maximum fragment length to be considered a reasonable pair alignment", optional = true)
     public int maxReasonableFragmentLength = DEFAULT_MAX_REASONABLE_FRAGMENT_LENGTH;
+
+    /**
+     * Minimum difference between best and second-best alignment for a read to be considered well-mapped
+     */
+    @Argument(fullName = "min-aligner-score-difference", doc = "Minimum difference between best and second-best alignment for a read to be considered well-mapped", optional = true)
+    public int minAlignerScoreDifference = DEFAULT_MIN_ALIGNER_SCORE_DIFFERENCE;
+
+    /**
+     * Number of regular i.e. non-alt contigs
+     */
+    @Argument(fullName = "num-regular-contigs", doc = "Number of regular i.e. non-alt contigs", optional = true)
+    public int numRegularContigs = DEFAULT_NUM_REGULAR_CONTIGS;
 
     /**
      * BWA-mem minimum seed length
