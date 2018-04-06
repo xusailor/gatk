@@ -33,8 +33,8 @@ public class XGBoostEvidenceFilterUnitTest extends GATKBaseTest {
     private static final String gcsClassifierModelFile
             = "gs://broad-dsde-methods/sv/reference/GRCh38/sv_evidence_classifier.bin";
     private static final String testFeaturesJsonFile = publicTestDir + "sv_features_test_data.json";
-    private static final double probabilityTol = 1.0e-7;
-    private static final double featuresTol = 1.0e-7;
+    private static final double probabilityTol = 2.0e-7;
+    private static final double featuresTol = 2.0e-7;
 
     private final ClassifierAccuracyData classifierAccuracyData = new ClassifierAccuracyData(testAccuracyDataJsonFile);
     private final double[] predictYProbaSerial = predictProba(
