@@ -194,7 +194,7 @@ public class StructuralVariationDiscoveryArgumentCollection implements Serializa
 
         @Argument(doc = "Minimum classified probability for a piece of evidence to pass xgboost evidence filter",
                 fullName = "sv-evidence-filter-threshold-probability")
-        public double svEvidenceFilterThresholdProbability = 0.278475;
+        public double svEvidenceFilterThresholdProbability = 0.253170;
 
         @Argument(doc = "Filter method for selecting evidence to group into SV Intervals",
                 fullName = "sv-evidence-filter-type")

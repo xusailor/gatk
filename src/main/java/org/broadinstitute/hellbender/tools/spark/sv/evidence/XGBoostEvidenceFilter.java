@@ -183,20 +183,26 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
         // create new struct for these two, use CigarOperator to update if instanceof ReadEvidence
         final CigarQualityInfo cigarQualityInfo = new CigarQualityInfo(evidence);
         final double evidenceType = evidenceTypeMap.get(evidence.getClass().getSimpleName());
-        final double mappingQuality = getMappingQuality(evidence);
+        final double mappingQuality = (double)getMappingQuality(evidence);
         final double templateSize = getTemplateSize(evidence);
         // calculate these similar to BreakpointDensityFilter, but always calculate full totals, never end early.
         final CoverageScaledOverlapInfo overlapInfo
                 = useClusterNumCoherent ? getClusterOverlapInfo(evidence) : getIndividualOverlapInfo(evidence);
 
-        return new EvidenceFeatures(new double[]{cigarQualityInfo.basesMatched, cigarQualityInfo.referenceLength,
-                                                 evidenceType, mappingQuality, templateSize,
-                                                 overlapInfo.numOverlap, overlapInfo.numCoherent});
+        return new EvidenceFeatures(
+            new double[]{
+                cigarQualityInfo.basesMatched, cigarQualityInfo.referenceLength,
+                evidenceType, mappingQuality, templateSize, overlapInfo.numOverlap, overlapInfo.overlapMappingQuality,
+                overlapInfo.meanOverlapMappingQuality, overlapInfo.numCoherent, overlapInfo.coherentMappingQuality
+            }
+        );
     }
 
-    private double getMappingQuality(final BreakpointEvidence evidence) {
+    private int getMappingQuality(final BreakpointEvidence evidence) {
+        // Note: return "max" mapping quality for non-ReadEvidence. Reasoning: some features depend on sum or average of
+        // read qualities. Non-ReadEvidence isn't *bad* per se, so give it a good score.
         return evidence instanceof BreakpointEvidence.ReadEvidence ?
-            ((BreakpointEvidence.ReadEvidence) evidence).getMappingQuality() : 0.0;
+            ((BreakpointEvidence.ReadEvidence) evidence).getMappingQuality() : 60;
     }
 
     private double getTemplateSize(final BreakpointEvidence evidence) {
@@ -225,6 +231,8 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
     }
 
     private CoverageScaledOverlapInfo getClusterOverlapInfo(final BreakpointEvidence evidence) {
+        // This method will only be used for calculating cluster properties, in case they are features needed by the
+        // classifier
         final SVInterval interval = evidence.getLocation();
         final Iterator<SVIntervalTree.Entry<List<BreakpointEvidence>>> itr = evidenceTree.overlappers(interval);
         PairedStrandedIntervalTree<BreakpointEvidence> targetIntervalTree = new PairedStrandedIntervalTree<>();
@@ -261,7 +269,8 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
             }
         }
 
-        return new CoverageScaledOverlapInfo(numOverlap, numCoherent, coverage);
+        return new CoverageScaledOverlapInfo(numOverlap, numCoherent, 0, 0,
+                                             coverage);
     }
 
 
@@ -270,22 +279,37 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
         final Iterator<SVIntervalTree.Entry<List<BreakpointEvidence>>> itr = evidenceTree.overlappers(interval);
         int numOverlap = -1; // correct for fact that evidence will overlap with itself
         int numCoherent;
+        // These initializations are a poor choice. overlapMappingQuality and coherentMappingQuality should not include
+        // this evidence's mapping quality!!
+        int overlapMappingQuality = 0;
+        int coherentMappingQuality;
         final Boolean strand = evidence.isEvidenceUpstreamOfBreakpoint();
         if (strand == null || !evidence.hasDistalTargets(readMetadata, minEvidenceMapQ)) {
+            // Definitely no other Evidence is coherent with this evidence
             numCoherent = 0;
+            coherentMappingQuality = getMappingQuality(evidence);
             while (itr.hasNext()) {
-                numOverlap += itr.next().getValue().size();
+                final List<BreakpointEvidence> evidenceForInterval = itr.next().getValue();
+                numOverlap += evidenceForInterval.size();
+                overlapMappingQuality += evidenceForInterval.stream().mapToInt(this::getMappingQuality).sum();
             }
-            return new CoverageScaledOverlapInfo(numOverlap, numCoherent, coverage);
+            return new CoverageScaledOverlapInfo(numOverlap, numCoherent, overlapMappingQuality, coherentMappingQuality,
+                                                 coverage);
         }
 
         numCoherent = -1; // correct for fact that evidence will cohere with itself
+        coherentMappingQuality = 0;
         List<StrandedInterval> distalTargets = evidence.getDistalTargets(readMetadata, minEvidenceMapQ);
         while (itr.hasNext()) {
             final List<BreakpointEvidence> evidenceForInterval = itr.next().getValue();
             numOverlap += evidenceForInterval.size();
 
+            // Note on this labelled loop: currently evidence only has zero or one distal targets, however the labelled
+            // loop / continue ensures that each overlapper is only counted once for coherence even if that changes
+            overlapperLoop:
             for (final BreakpointEvidence overlapper : evidenceForInterval) {
+                final int overlapperMapQualtity = getMappingQuality(overlapper);
+                overlapMappingQuality += overlapperMapQualtity;
                 if (overlapper.isEvidenceUpstreamOfBreakpoint() != strand
                         || !overlapper.hasDistalTargets(readMetadata, minEvidenceMapQ)) {
                     continue;
@@ -297,13 +321,16 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
                         if (distalTarget.getStrand() == overlapperDistalTarget.getStrand()
                                 && distalTarget.getInterval().overlaps(overlapperDistalTarget.getInterval())) {
                             numCoherent += 1;
+                            coherentMappingQuality += overlapperMapQualtity;
+                            continue overlapperLoop;
                         }
                     }
                 }
             }
         }
 
-        return new CoverageScaledOverlapInfo(numOverlap, numCoherent, coverage);
+        return new CoverageScaledOverlapInfo(numOverlap, numCoherent, overlapMappingQuality, coherentMappingQuality,
+                                             coverage);
     }
 
 
@@ -322,11 +349,18 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
 
     private static class CoverageScaledOverlapInfo {
         final double numOverlap;
+        final double overlapMappingQuality;
+        final double meanOverlapMappingQuality;
         final double numCoherent;
+        final double coherentMappingQuality;
 
-        CoverageScaledOverlapInfo(final int numOverlap, final int numCoherent, final double coverage) {
+        CoverageScaledOverlapInfo(final int numOverlap, final int numCoherent, final int overlapMappingQuality,
+                                  final int coherentMappingQuality, final double coverage) {
             this.numOverlap = ((double)numOverlap) / coverage;
+            this.overlapMappingQuality = ((double)overlapMappingQuality) / coverage;
+            this.meanOverlapMappingQuality = ((double)overlapMappingQuality) / (numOverlap + 1.0);
             this.numCoherent = ((double)numCoherent) / coverage;
+            this.coherentMappingQuality = ((double)coherentMappingQuality) / coverage;
         }
     }
 
