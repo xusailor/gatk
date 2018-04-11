@@ -36,6 +36,8 @@ public class M2ArgumentCollection extends AssemblyBasedCallerArgumentCollection 
     public static final String DOWNSAMPLING_STRIDE_SHORT_NAME = "stride";
     public static final String MAX_SUSPICIOUS_READS_PER_ALIGNMENT_START_LONG_NAME = "max-suspicious-reads-per-alignment-start";
     public static final String NORMAL_LOD_LONG_NAME = "normal-lod";
+    public static final String MAX_MNP_DISTANCE_LONG_NAME = "max-mnp-distance";
+    public static final String MAX_MNP_DISTANCE_SHORT_NAME = "mnp-dist";
 
     //TODO: HACK ALERT HACK ALERT HACK ALERT
     //TODO: GATK4 does not yet have a way to tag inputs, eg -I:tumor tumor.bam -I:normal normal.bam,
@@ -130,6 +132,14 @@ public class M2ArgumentCollection extends AssemblyBasedCallerArgumentCollection 
      */
     @Argument(fullName = NORMAL_LOD_LONG_NAME, optional = true, doc = "LOD threshold for calling normal variant non-germline.")
     public double normalLodThreshold = 2.2;
+
+    /**
+     * Two or more phased substitutions separated by this distance or less are merged into MNPs.
+     */
+    @Advanced
+    @Argument(fullName = MAX_MNP_DISTANCE_LONG_NAME, shortName = MAX_MNP_DISTANCE_SHORT_NAME,
+            doc = "Two or more phased substitutions separated by this distance or less are merged into MNPs.", optional = true)
+    public int maxMnpDistance = 1;
 
 
     /**
