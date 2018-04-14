@@ -12,7 +12,7 @@ public class BreakpointFilterFactory {
             final PartitionCrossingChecker partitionCrossingChecker
     ) {
         switch(params.svEvidenceFilterType) {
-            case TWO_THRESHOLD:
+            case DENSITY:
                 return new BreakpointDensityFilter(
                         evidenceItr, readMetadata, params.minEvidenceWeightPerCoverage, params.minCoherentEvidenceWeightPerCoverage,
                         partitionCrossingChecker, params.minEvidenceMapQ

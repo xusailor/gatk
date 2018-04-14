@@ -198,10 +198,10 @@ public class StructuralVariationDiscoveryArgumentCollection implements Serializa
 
         @Argument(doc = "Filter method for selecting evidence to group into SV Intervals",
                 fullName = "sv-evidence-filter-type")
-        public SvEvidenceFilterType svEvidenceFilterType = SvEvidenceFilterType.TWO_THRESHOLD;
+        public SvEvidenceFilterType svEvidenceFilterType = SvEvidenceFilterType.DENSITY;
     }
 
-    public enum SvEvidenceFilterType {TWO_THRESHOLD, XGBOOST;}
+    public enum SvEvidenceFilterType {DENSITY, XGBOOST;}
 
     public static class DiscoverVariantsFromContigsAlignmentsSparkArgumentCollection implements Serializable {
         private static final long serialVersionUID = 1L;

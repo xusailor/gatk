@@ -33,8 +33,8 @@ public class XGBoostEvidenceFilterUnitTest extends GATKBaseTest {
     private static final String gcsClassifierModelFile
             = "gs://broad-dsde-methods/sv/reference/GRCh38/sv_evidence_classifier.bin";
     private static final String testFeaturesJsonFile = publicTestDir + "sv_features_test_data.json";
-    private static final double probabilityTol = 3.0e-7;
-    private static final double featuresTol = 3.0e-7;
+    private static final double probabilityTol = 2.0e-4;
+    private static final double featuresTol = 1.0e-6;
 
     private final ClassifierAccuracyData classifierAccuracyData = new ClassifierAccuracyData(testAccuracyDataJsonFile);
     private final double[] predictYProbaSerial = predictProba(
@@ -121,16 +121,15 @@ public class XGBoostEvidenceFilterUnitTest extends GATKBaseTest {
                 evidenceList.iterator(), readMetadata, params, emptyCrossingChecker
         );
         for(int ind = 0; ind < featuresTestData.stringReps.length; ++ind) {
+            final BreakpointEvidence evidence = evidenceList.get(ind);
             final String stringRep = featuresTestData.stringReps[ind];
             final EvidenceFeatures fVec = featuresTestData.features[ind];
-            final BreakpointEvidence evidence = BreakpointEvidence.fromStringRep(stringRep, readMetadata);
-            final String convertedRep = evidence.stringRep(readMetadata, params.minEvidenceMapQ);
+
+            final BreakpointEvidence convertedEvidence = BreakpointEvidence.fromStringRep(stringRep, readMetadata);
+            final String convertedRep = convertedEvidence.stringRep(readMetadata, params.minEvidenceMapQ);
             AssertJUnit.assertEquals("BreakpointEvidence.fromStringRep does not invert BreakpointEvidence.stringRep",
                     stringRep.trim(), convertedRep.trim());
             final EvidenceFeatures calcFVec = evidenceFilter.getFeatures(evidence);
-            if(Math.abs(fVec.getValues()[0] - calcFVec.getValues()[0]) > featuresTol) {
-                final int stupid = 1;
-            }
             AssertJUnit.assertArrayEquals("Features calculated by XGBoostEvidenceFilter don't match expected features",
                     fVec.getValues(), calcFVec.getValues(), featuresTol);
         }

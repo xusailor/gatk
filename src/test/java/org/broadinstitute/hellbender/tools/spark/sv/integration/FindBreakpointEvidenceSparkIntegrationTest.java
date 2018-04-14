@@ -51,7 +51,7 @@ public class FindBreakpointEvidenceSparkIntegrationTest extends CommandLineProgr
                     " --target-link-file "      + outputDir + "/targetLinks.bedpe" +
                     " --min-evidence-count " + 15 / bamCoverage +
                     " --min-coherent-evidence-count " + 7 / bamCoverage +
-                    " --sv-evidence-filter-type " + "TWO_THRESHOLD";
+                    " --sv-evidence-filter-type " + "DENSITY";
         }
 
         @Override

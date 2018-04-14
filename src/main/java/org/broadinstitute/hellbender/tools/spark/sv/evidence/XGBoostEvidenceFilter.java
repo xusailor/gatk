@@ -5,6 +5,7 @@ import biz.k11i.xgboost.learner.ObjFunction;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.Lists;
 import htsjdk.samtools.CigarElement;
 import htsjdk.samtools.CigarOperator;
 import htsjdk.samtools.TextCigarCodec;
@@ -15,6 +16,7 @@ import org.broadinstitute.hellbender.tools.spark.utils.IntHistogram;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.gcs.BucketUtils;
 import scala.Tuple2;
+import scala.tools.ant.sabbus.Break;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -33,18 +35,22 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
             "SplitRead", "LargeIndel", "WeirdTemplateSize", "SameStrandPair", "OutiesPair"
     );
 
-    private final ReadMetadata readMetadata;
+    static private final int NUM_OVERLAP = 0;
+    static private final int NUM_COHERENT = 1;
+    static private final int OVERLAP_MAPPING_QUALITY = 2;
+    static private final int COHERENT_MAPPING_QUALITY = 3;
+
     private final PartitionCrossingChecker partitionCrossingChecker;
 
     private final Predictor predictor;
     private final Map<String, Integer> evidenceTypeMap;
     private final double coverage;
-    private final int minEvidenceMapQ;
     private final double thresholdProbability;
     private final Map<String, String> readGroupToLibraryMap;
     private final Map<String, LibraryStatistics> libraryStatisticsMap;
 
-    private final SVIntervalTree<List<BreakpointEvidence>> evidenceTree;
+    private final EvidenceOverlapChecker evidenceOverlapChecker;
+    private final Map<BreakpointEvidence, int[]> rawFeatureCache;
 
     private Iterator<SVIntervalTree.Entry<List<BreakpointEvidence>>> treeItr;
     private Iterator<BreakpointEvidence> listItr;
@@ -57,25 +63,19 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
     ) {
         this.predictor = loadPredictor(params.svEvidenceFilterModelFile);
         this.evidenceTypeMap = loadEvidenceTypeMap(params.svCategoricalVariablesFile);
-        this.readMetadata = readMetadata;
         this.partitionCrossingChecker = partitionCrossingChecker;
         this.coverage = readMetadata.getCoverage();
-        this.minEvidenceMapQ = params.minEvidenceMapQ;
         this.thresholdProbability = params.svEvidenceFilterThresholdProbability;
         this.readGroupToLibraryMap = readMetadata.getReadGroupToLibraryMap();
         this.libraryStatisticsMap = readMetadata.getAllLibraryStatistics();
 
-        this.evidenceTree = buildTree(evidenceItr);
-        this.treeItr = evidenceTree.iterator();
+        this.evidenceOverlapChecker = new EvidenceOverlapChecker(evidenceItr, readMetadata, params.minEvidenceMapQ);
+        this.rawFeatureCache = new HashMap<>();
+
         this.listItr = null;
+        this.treeItr = evidenceOverlapChecker.getTreeItr();
     }
 
-
-    private static InputStream getInputStream(final String fileLocation) {
-        return fileLocation.startsWith("gatk-resources::") ?
-                XGBoostEvidenceFilter.class.getResourceAsStream(fileLocation.substring(16))
-                : BucketUtils.openFile(fileLocation);
-    }
 
     public static Predictor loadPredictor(final String modelFileLocation) {
         ObjFunction.useFastMathExp(useFastMathExp);
@@ -86,6 +86,12 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
                     "Unable to load predictor from classifier file " + modelFileLocation + ": " + e.getMessage()
             );
         }
+    }
+
+    private static InputStream getInputStream(final String fileLocation) {
+        return fileLocation.startsWith("gatk-resources::") ?
+                XGBoostEvidenceFilter.class.getResourceAsStream(fileLocation.substring(16))
+                : BucketUtils.openFile(fileLocation);
     }
 
     @VisibleForTesting
@@ -152,15 +158,6 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
         return listItr.next();
     }
 
-    private static SVIntervalTree<List<BreakpointEvidence>> buildTree( final Iterator<BreakpointEvidence> evidenceItr ) {
-        SVIntervalTree<List<BreakpointEvidence>> tree = new SVIntervalTree<>();
-        while ( evidenceItr.hasNext() ) {
-            final BreakpointEvidence evidence = evidenceItr.next();
-            addToTree(tree, evidence.getLocation(), evidence);
-        }
-        return tree;
-    }
-
     private boolean isValidated( final List<BreakpointEvidence> evList ) {
         for ( final BreakpointEvidence ev : evList ) {
             if ( ev.isValidated() ) return true;
@@ -186,14 +183,18 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
         final double mappingQuality = (double)getMappingQuality(evidence);
         final double templateSize = getTemplateSize(evidence);
         // calculate these similar to BreakpointDensityFilter, but always calculate full totals, never end early.
-        final CoverageScaledOverlapInfo overlapInfo
-                = useClusterNumCoherent ? getClusterOverlapInfo(evidence) : getIndividualOverlapInfo(evidence);
+        final CoverageScaledOverlapInfo individualOverlapInfo = getIndividualOverlapInfo(evidence);
+        final CoverageScaledOverlapInfo clusterOverlapInfo = getClusterOverlapInfo(evidence);
 
         return new EvidenceFeatures(
             new double[]{
-                cigarQualityInfo.basesMatched, cigarQualityInfo.referenceLength,
-                evidenceType, mappingQuality, templateSize, overlapInfo.numOverlap, overlapInfo.overlapMappingQuality,
-                overlapInfo.meanOverlapMappingQuality, overlapInfo.numCoherent, overlapInfo.coherentMappingQuality
+                cigarQualityInfo.basesMatched, cigarQualityInfo.referenceLength, evidenceType, mappingQuality, templateSize,
+                individualOverlapInfo.numOverlap, individualOverlapInfo.overlapMappingQuality,
+                individualOverlapInfo.meanOverlapMappingQuality, individualOverlapInfo.numCoherent,
+                individualOverlapInfo.coherentMappingQuality,
+                clusterOverlapInfo.numOverlap, clusterOverlapInfo.overlapMappingQuality,
+                clusterOverlapInfo.meanOverlapMappingQuality, clusterOverlapInfo.numCoherent,
+                clusterOverlapInfo.coherentMappingQuality
             }
         );
     }
@@ -230,113 +231,105 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
         }
     }
 
-    private CoverageScaledOverlapInfo getClusterOverlapInfo(final BreakpointEvidence evidence) {
-        // This method will only be used for calculating cluster properties, in case they are features needed by the
-        // classifier
-        final SVInterval interval = evidence.getLocation();
-        final Iterator<SVIntervalTree.Entry<List<BreakpointEvidence>>> itr = evidenceTree.overlappers(interval);
-        PairedStrandedIntervalTree<BreakpointEvidence> targetIntervalTree = new PairedStrandedIntervalTree<>();
-        int numOverlap = -1; // correct for fact that evidence will overlap with itself
+    private void cacheFeatures(final BreakpointEvidence evidence) {
+        /*
+        final int evidenceMappingQuality = getMappingQuality(evidence);
+        int numOverlap = -1;
+        int overlapMappingQuality = -evidenceMappingQuality;
+        for(final Iterator<BreakpointEvidence> overlapper_itr = evidenceOverlapChecker.overlappers(evidence); overlapper_itr.hasNext();) {
+            final BreakpointEvidence overlapper = overlapper_itr.next();
+            if(overlapper == evidence) {
+                continue; // don't count self-overlap
+            }
+            numOverlap += 1;
+            overlapMappingQuality += getMappingQuality(overlapper);
+        }
+
         int numCoherent = 0;
+        int coherentMappingQuality = 0;
+        for(final Iterator<BreakpointEvidence> coherent_itr = evidenceOverlapChecker.coherent(evidence); coherent_itr.hasNext();) {
+            final BreakpointEvidence coherent = coherent_itr.next();
+            if(coherent == evidence) {
+                continue; // don't count self-coherence
+            }
+            numCoherent += 1;
+            coherentMappingQuality += getMappingQuality(coherent);
+        }
+        */
+        int numOverlap = 0;
+        int overlapMappingQuality = 0;
+        int numCoherent = 0;
+        int coherentMappingQuality = 0;
+        for(final Iterator<Tuple2<BreakpointEvidence, Boolean>> overlapper_itr = evidenceOverlapChecker.overlappersWithCoherence(evidence);
+                overlapper_itr.hasNext();) {
+            final Tuple2<BreakpointEvidence, Boolean> itr_results = overlapper_itr.next();
+            final BreakpointEvidence overlapper = itr_results._1;
+            if(overlapper == evidence) {
+                continue; // don't count self-overlap
+            }
+            numOverlap += 1;
+            final int mappingQuality = getMappingQuality(overlapper);
+            overlapMappingQuality += mappingQuality;
 
-        while (itr.hasNext()) {
-            final List<BreakpointEvidence> evidenceForInterval = itr.next().getValue();
-            numOverlap += evidenceForInterval.size();
-            // store any overlappers with distal targets in PairStrandedIntervalTree
-            for (final BreakpointEvidence overlapper : evidenceForInterval) {
-                if (overlapper.hasDistalTargets(readMetadata, minEvidenceMapQ)) {
-                    final List<StrandedInterval> distalTargets = overlapper.getDistalTargets(readMetadata, minEvidenceMapQ);
-                    for (int i = 0; i < distalTargets.size(); i++) {
-                        targetIntervalTree.put(
-                                new PairedStrandedIntervals(
-                                        new StrandedInterval(overlapper.getLocation(), overlapper.isEvidenceUpstreamOfBreakpoint()),
-                                        distalTargets.get(i)),
-                                overlapper
-                        );
-                    }
-                }
+            final boolean isCoherent = itr_results._2;
+            if(isCoherent) {
+                numCoherent += 1;
+                coherentMappingQuality += mappingQuality;
             }
         }
-
-        // Find maximal numCoherent of any BreakpointEvidence in PairStrandedIntervalTree
-        final Iterator<Tuple2<PairedStrandedIntervals, BreakpointEvidence>> targetLinkIterator = targetIntervalTree.iterator();
-        while (targetLinkIterator.hasNext()) {
-            Tuple2<PairedStrandedIntervals, BreakpointEvidence> next = targetLinkIterator.next();
-            // subtract 1 to offset for coherence with self
-            final int targetNumCoherent = (int) Utils.stream(targetIntervalTree.overlappers(next._1())).count() - 1;
-            if (targetNumCoherent > numCoherent) {
-                numCoherent = targetNumCoherent;
-            }
-        }
-
-        return new CoverageScaledOverlapInfo(numOverlap, numCoherent, 0, 0,
-                                             coverage);
+        final int[] evidenceFeatureCache = new int[4];
+        evidenceFeatureCache[NUM_OVERLAP] = numOverlap;
+        evidenceFeatureCache[NUM_COHERENT] = numCoherent;
+        evidenceFeatureCache[OVERLAP_MAPPING_QUALITY] = overlapMappingQuality;
+        evidenceFeatureCache[COHERENT_MAPPING_QUALITY] = coherentMappingQuality;
+        rawFeatureCache.put(evidence, evidenceFeatureCache);
     }
-
 
     private CoverageScaledOverlapInfo getIndividualOverlapInfo(final BreakpointEvidence evidence) {
-        final SVInterval interval = evidence.getLocation();
-        final Iterator<SVIntervalTree.Entry<List<BreakpointEvidence>>> itr = evidenceTree.overlappers(interval);
-        int numOverlap = -1; // correct for fact that evidence will overlap with itself
-        int numCoherent;
-        // These initializations are a poor choice. overlapMappingQuality and coherentMappingQuality should not include
-        // this evidence's mapping quality!!
-        int overlapMappingQuality = 0;
-        int coherentMappingQuality;
-        final Boolean strand = evidence.isEvidenceUpstreamOfBreakpoint();
-        if (strand == null || !evidence.hasDistalTargets(readMetadata, minEvidenceMapQ)) {
-            // Definitely no other Evidence is coherent with this evidence
-            numCoherent = 0;
-            coherentMappingQuality = getMappingQuality(evidence);
-            while (itr.hasNext()) {
-                final List<BreakpointEvidence> evidenceForInterval = itr.next().getValue();
-                numOverlap += evidenceForInterval.size();
-                overlapMappingQuality += evidenceForInterval.stream().mapToInt(this::getMappingQuality).sum();
-            }
-            return new CoverageScaledOverlapInfo(numOverlap, numCoherent, overlapMappingQuality, coherentMappingQuality,
-                                                 coverage);
+        if(!rawFeatureCache.containsKey(evidence)) {
+            cacheFeatures(evidence);
         }
-
-        numCoherent = -1; // correct for fact that evidence will cohere with itself
-        coherentMappingQuality = 0;
-        List<StrandedInterval> distalTargets = evidence.getDistalTargets(readMetadata, minEvidenceMapQ);
-        while (itr.hasNext()) {
-            final List<BreakpointEvidence> evidenceForInterval = itr.next().getValue();
-            numOverlap += evidenceForInterval.size();
-
-            // Note on this labelled loop: currently evidence only has zero or one distal targets, however the labelled
-            // loop / continue ensures that each overlapper is only counted once for coherence even if that changes
-            overlapperLoop:
-            for (final BreakpointEvidence overlapper : evidenceForInterval) {
-                final int overlapperMapQualtity = getMappingQuality(overlapper);
-                overlapMappingQuality += overlapperMapQualtity;
-                if (overlapper.isEvidenceUpstreamOfBreakpoint() != strand
-                        || !overlapper.hasDistalTargets(readMetadata, minEvidenceMapQ)) {
-                    continue;
-                }
-                final List<StrandedInterval> overlapperDistalTargets
-                        = overlapper.getDistalTargets(readMetadata, minEvidenceMapQ);
-                for (final StrandedInterval distalTarget : distalTargets) {
-                    for (final StrandedInterval overlapperDistalTarget : overlapperDistalTargets) {
-                        if (distalTarget.getStrand() == overlapperDistalTarget.getStrand()
-                                && distalTarget.getInterval().overlaps(overlapperDistalTarget.getInterval())) {
-                            numCoherent += 1;
-                            coherentMappingQuality += overlapperMapQualtity;
-                            continue overlapperLoop;
-                        }
-                    }
-                }
-            }
-        }
-
+        final int[] evidenceFeatureCache = rawFeatureCache.get(evidence);
+        final int numOverlap = evidenceFeatureCache[NUM_OVERLAP];
+        final int numCoherent = evidenceFeatureCache[NUM_COHERENT];
+        final int overlapMappingQuality = evidenceFeatureCache[OVERLAP_MAPPING_QUALITY];
+        final int coherentMappingQuality = evidenceFeatureCache[COHERENT_MAPPING_QUALITY];
+        final double meanOverlapMappingQuality = ((double)overlapMappingQuality) / numOverlap;
         return new CoverageScaledOverlapInfo(numOverlap, numCoherent, overlapMappingQuality, coherentMappingQuality,
-                                             coverage);
+                meanOverlapMappingQuality, coverage);
     }
 
+    private CoverageScaledOverlapInfo getClusterOverlapInfo(final BreakpointEvidence evidence) {
+        int clusterNumOverlap = 0;
+        int clusterNumCoherent = 0;
+        int clusterOverlapMappingQuality = 0;
+        int clusterCoherentMappingQuality = 0;
+        double clusterMeanOverlapMappingQuality = 0.0;
+        for (final Iterator<BreakpointEvidence> overlapper_itr = evidenceOverlapChecker.overlappers(evidence); overlapper_itr.hasNext(); ) {
+            final BreakpointEvidence overlapper = overlapper_itr.next();
+            if (overlapper == evidence) {
+                continue; // don't count self-overlap in cluster features
+            }
+            if(!rawFeatureCache.containsKey(overlapper)) {
+                cacheFeatures(overlapper);
+            }
+            final int[] overlapperFeatureCache = rawFeatureCache.get(overlapper);
+            clusterNumOverlap = Math.max(clusterNumOverlap, overlapperFeatureCache[NUM_OVERLAP]);
+            clusterNumCoherent = Math.max(clusterNumCoherent, overlapperFeatureCache[NUM_COHERENT]);
+            clusterOverlapMappingQuality = Math.max(clusterOverlapMappingQuality, overlapperFeatureCache[OVERLAP_MAPPING_QUALITY]);
+            clusterCoherentMappingQuality = Math.max(clusterCoherentMappingQuality, overlapperFeatureCache[COHERENT_MAPPING_QUALITY]);
+
+            final double meanOverlapMappingQuality = ((double) overlapperFeatureCache[OVERLAP_MAPPING_QUALITY]) / overlapperFeatureCache[NUM_OVERLAP];
+            clusterMeanOverlapMappingQuality = Math.max(clusterMeanOverlapMappingQuality, meanOverlapMappingQuality);
+        }
+
+        return new CoverageScaledOverlapInfo(clusterNumOverlap, clusterNumCoherent, clusterOverlapMappingQuality,
+                clusterCoherentMappingQuality, clusterMeanOverlapMappingQuality, coverage);
+    }
 
     private static <T> void addToTree( final SVIntervalTree<List<T>> tree,
-                                   final SVInterval interval,
-                                   final T value ) {
+                                       final SVInterval interval,
+                                       final T value ) {
         final SVIntervalTree.Entry<List<T>> entry = tree.find(interval);
         if ( entry != null ) {
             entry.getValue().add(value);
@@ -347,6 +340,205 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
         }
     }
 
+    private static class EvidenceOverlapChecker {
+        private final SVIntervalTree<List<BreakpointEvidence>> evidenceTree;
+        //private final PairedStrandedIntervalTree<BreakpointEvidence> targetIntervalTree;
+        private final ReadMetadata readMetadata;
+        private final int minEvidenceMapQ;
+
+        EvidenceOverlapChecker(final Iterator<BreakpointEvidence> evidenceItr, final ReadMetadata readMetadata,
+                               final int minEvidenceMapQ) {
+            this.readMetadata = readMetadata;
+            this.minEvidenceMapQ = minEvidenceMapQ;
+            evidenceTree = new SVIntervalTree<>();
+            //targetIntervalTree = new PairedStrandedIntervalTree<>();
+            while ( evidenceItr.hasNext() ) {
+                final BreakpointEvidence evidence = evidenceItr.next();
+                addToTree(evidenceTree, evidence.getLocation(), evidence);
+                /*
+                final Boolean strand = evidence.isEvidenceUpstreamOfBreakpoint();
+                if (strand != null && evidence.hasDistalTargets(readMetadata, minEvidenceMapQ)) {
+                    final StrandedInterval strandedEvidence = new StrandedInterval(evidence.getLocation(), strand);
+                    for(final StrandedInterval distalTarget : evidence.getDistalTargets(readMetadata, minEvidenceMapQ)) {
+                        targetIntervalTree.put(new PairedStrandedIntervals(strandedEvidence, distalTarget), evidence);
+                    }
+                }
+                */
+            }
+        }
+
+        Iterator<BreakpointEvidence> overlappers(final BreakpointEvidence evidence) {
+            return new OverlapperIterator(evidence, evidenceTree);
+        }
+        /*
+        Iterator<BreakpointEvidence> coherent(final BreakpointEvidence evidence) {
+            return new CoherentIterator(evidence, targetIntervalTree, readMetadata, minEvidenceMapQ);
+        }
+        */
+        Iterator<Tuple2<BreakpointEvidence, Boolean>> overlappersWithCoherence(final BreakpointEvidence evidence) {
+            return new OverlapAndCoherenceIterator(evidence, evidenceTree, readMetadata, minEvidenceMapQ);
+        }
+
+        Iterator<SVIntervalTree.Entry<List<BreakpointEvidence>>> getTreeItr() {
+            return evidenceTree.iterator();
+        }
+
+        private static class OverlapperIterator  implements Iterator<BreakpointEvidence> {
+            private final Iterator<SVIntervalTree.Entry<List<BreakpointEvidence>>> treeItr;
+            private Iterator<BreakpointEvidence> listItr;
+
+            OverlapperIterator(final BreakpointEvidence evidence,
+                               final SVIntervalTree<List<BreakpointEvidence>> evidenceTree) {
+                treeItr = evidenceTree.overlappers(evidence.getLocation());
+                listItr = null;
+            }
+
+            @Override
+            public boolean hasNext() {
+                if ( listItr != null && listItr.hasNext() ) {
+                    return true;
+                }
+                while(treeItr.hasNext()) {
+                    listItr = treeItr.next().getValue().iterator();
+                    if(listItr.hasNext()) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            @Override
+            public BreakpointEvidence next() {
+                if ( !hasNext() ) {
+                    throw new NoSuchElementException("No next element.");
+                }
+                return listItr.next();
+            }
+        }
+
+        private static class OverlapAndCoherenceIterator implements Iterator<Tuple2<BreakpointEvidence, Boolean>> {
+            private final ReadMetadata readMetadata;
+            private final int minEvidenceMapQ;
+            private final Iterator<SVIntervalTree.Entry<List<BreakpointEvidence>>> treeItr;
+            private Iterator<BreakpointEvidence> listItr;
+            private final boolean checkCoherence;
+            private final Boolean strand;
+            private final List<StrandedInterval> distalTargets;
+
+            OverlapAndCoherenceIterator(final BreakpointEvidence evidence,
+                                        final SVIntervalTree<List<BreakpointEvidence>> evidenceTree,
+                                        final ReadMetadata readMetadata,
+                                        final int minEvidenceMapQ) {
+                this.readMetadata = readMetadata;
+                this.minEvidenceMapQ = minEvidenceMapQ;
+                this.treeItr = evidenceTree.overlappers(evidence.getLocation());
+                this.strand = evidence.isEvidenceUpstreamOfBreakpoint();
+                this.checkCoherence = (strand != null) && evidence.hasDistalTargets(readMetadata, minEvidenceMapQ);
+                if(this.checkCoherence) {
+                    distalTargets = new ArrayList<>(evidence.getDistalTargets(readMetadata, minEvidenceMapQ));
+                } else {
+                    distalTargets = null;
+                }
+            }
+
+            @Override
+            public boolean hasNext() {
+                if ( listItr != null && listItr.hasNext() ) {
+                    return true;
+                }
+                while(treeItr.hasNext()) {
+                    listItr = treeItr.next().getValue().iterator();
+                    if(listItr.hasNext()) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            @Override
+            public Tuple2<BreakpointEvidence, Boolean> next() {
+                if ( !hasNext() ) {
+                    throw new NoSuchElementException("No next element.");
+                }
+                final BreakpointEvidence overlapper = listItr.next();
+                Boolean isCoherent = false;
+                if(checkCoherence) {
+                    Boolean overlapperStrand = overlapper.isEvidenceUpstreamOfBreakpoint();
+                    if(overlapperStrand == strand && overlapper.hasDistalTargets(readMetadata, minEvidenceMapQ)) {
+                        for(final StrandedInterval distalTarget : distalTargets) {
+                            for(final StrandedInterval overlapperDistalTarget : new ArrayList<>(overlapper.getDistalTargets(readMetadata, minEvidenceMapQ))) {
+                                if(distalTarget.getStrand() == overlapperDistalTarget.getStrand()
+                                        && distalTarget.getInterval().overlaps(overlapperDistalTarget.getInterval())) {
+                                    isCoherent = true; // could break, but everything has 1 distal target, so false optimization
+                                }
+                            }
+                        }
+                    }
+                }
+                return new Tuple2<>(overlapper, isCoherent);
+            }
+        }
+
+        private static class CoherentIterator  implements Iterator<BreakpointEvidence> {
+            private Iterator<Tuple2<PairedStrandedIntervals, BreakpointEvidence>> treeItr;
+            private final Iterator<StrandedInterval> distalTargetItr;
+            private final StrandedInterval strandedEvidence;
+            private final PairedStrandedIntervalTree<BreakpointEvidence> coherentTree;
+
+            CoherentIterator(final BreakpointEvidence evidence,
+                             final PairedStrandedIntervalTree<BreakpointEvidence> coherentTree,
+                             final ReadMetadata readMetadata,
+                             final int minEvidenceMapq) {
+                treeItr = null;
+                final Boolean strand = evidence.isEvidenceUpstreamOfBreakpoint();
+                if (strand != null && evidence.hasDistalTargets(readMetadata, minEvidenceMapq)) {
+                    distalTargetItr = evidence.getDistalTargets(readMetadata, minEvidenceMapq).iterator();
+                    strandedEvidence = new StrandedInterval(evidence.getLocation(), strand);
+                    this.coherentTree = coherentTree;
+                } else {
+                    distalTargetItr = null;
+                    strandedEvidence = null;
+                    this.coherentTree = null;
+                }
+            }
+
+            @Override
+            public boolean hasNext() {
+                if ( treeItr != null && treeItr.hasNext() ) {
+                    return true;
+                }
+                if(distalTargetItr == null) {
+                    return false;
+                }
+                while(distalTargetItr.hasNext()) {
+                    treeItr = Lists.newArrayList(
+                            coherentTree.overlappers(
+                                    new PairedStrandedIntervals(strandedEvidence, distalTargetItr.next())
+                            )
+                    ).iterator();
+                    /*
+                    treeItr = coherentTree.overlappers(
+                        new PairedStrandedIntervals(strandedEvidence, distalTargetItr.next())
+                    );
+                    */
+                    if (treeItr.hasNext()) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            @Override
+            public BreakpointEvidence next() {
+                if ( !hasNext() ) {
+                    throw new NoSuchElementException("No next element.");
+                }
+                return treeItr.next()._2;
+            }
+        }
+    }
+
+
     private static class CoverageScaledOverlapInfo {
         final double numOverlap;
         final double overlapMappingQuality;
@@ -355,12 +547,13 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
         final double coherentMappingQuality;
 
         CoverageScaledOverlapInfo(final int numOverlap, final int numCoherent, final int overlapMappingQuality,
-                                  final int coherentMappingQuality, final double coverage) {
+                                  final int coherentMappingQuality, final double meanOverlapMappingQuality,
+                                  final double coverage) {
             this.numOverlap = ((double)numOverlap) / coverage;
             this.overlapMappingQuality = ((double)overlapMappingQuality) / coverage;
-            this.meanOverlapMappingQuality = ((double)overlapMappingQuality) / (numOverlap + 1.0);
             this.numCoherent = ((double)numCoherent) / coverage;
             this.coherentMappingQuality = ((double)coherentMappingQuality) / coverage;
+            this.meanOverlapMappingQuality = meanOverlapMappingQuality;
         }
     }
 
