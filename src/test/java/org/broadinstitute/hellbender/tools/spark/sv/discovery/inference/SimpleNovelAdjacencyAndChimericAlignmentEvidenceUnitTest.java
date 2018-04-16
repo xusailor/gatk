@@ -35,8 +35,9 @@ public class SimpleNovelAdjacencyAndChimericAlignmentEvidenceUnitTest extends GA
                     SimpleSVDiscoveryTestDataProvider.b37_seqDict);
             final ChimericAlignment reverseRep = new ChimericAlignment(pair._2.firstAlignment, pair._2.secondAlignment, Collections.emptyList(), pair._2.evidenceAssemblyContigName,
                     SimpleSVDiscoveryTestDataProvider.b37_seqDict);
-            final List<Tuple2<ChimericAlignment, String>> evidence = Arrays.asList(new Tuple2<>(forwardRep, NO_GOOD_MAPPING_TO_NON_CANONICAL_CHROMOSOME),
-                    new Tuple2<>(reverseRep, NO_GOOD_MAPPING_TO_NON_CANONICAL_CHROMOSOME));
+            final List<SimpleNovelAdjacencyAndChimericAlignmentEvidence.SimpleChimeraAndNCAMstring> evidence =
+                    Arrays.asList(new SimpleNovelAdjacencyAndChimericAlignmentEvidence.SimpleChimeraAndNCAMstring(forwardRep, NO_GOOD_MAPPING_TO_NON_CANONICAL_CHROMOSOME),
+                            new SimpleNovelAdjacencyAndChimericAlignmentEvidence.SimpleChimeraAndNCAMstring(reverseRep, NO_GOOD_MAPPING_TO_NON_CANONICAL_CHROMOSOME));
             data.add(new Object[]{new SimpleNovelAdjacencyAndChimericAlignmentEvidence(biPathBubble, evidence)});
         }
         return data.toArray(new Object[data.size()][]);
