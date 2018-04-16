@@ -137,7 +137,7 @@ abstract class BreakpointsInference {
                 final ChimericAlignment.DistancesBetweenAlignmentsOnRefAndOnRead distances = simpleChimera.getDistancesBetweenAlignmentsOnRefAndOnRead();
                 final int distBetweenAlignRegionsOnRef = distances.distBetweenAlignRegionsOnRef, // distance-1 between the two regions on reference, denoted as d1 in the comments below
                           distBetweenAlignRegionsOnCtg = distances.distBetweenAlignRegionsOnCtg; // distance-1 between the two regions on contig, denoted as d2 in the comments below
-                if (distBetweenAlignRegionsOnRef > 0) {        // Deletion:
+                if (distBetweenAlignRegionsOnRef > 0) {        // Deletion or RPL:
                     if (distBetweenAlignRegionsOnCtg <= 0) {     // simple deletion when == 0; with homology when < 0
                         return TypeInferredFromSimpleChimera.SIMPLE_DEL;
                     } else {
