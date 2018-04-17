@@ -335,7 +335,7 @@ final class CpxVariantCanonicalRepresentation {
                                                                                           : (head.referenceSpan.getStart() - firstSegment.getEnd() == 1);
             if ( ! firstSegmentNeighborsHeadAlignment )
                 throw new CpxVariantInterpreter.UnhandledCaseSeen("1st segment is not overlapping with head alignment but it is not immediately before/after the head alignment either\n"
-                        + tigWithInsMappings.toString());
+                        + tigWithInsMappings.toString() + "\nSegments:\t" + segments.toString());
             start = head.endInAssembledContig;
         } else {
             final SimpleInterval intersect = firstSegment.intersect(head.referenceSpan);

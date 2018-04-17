@@ -11,10 +11,7 @@ import org.broadinstitute.hellbender.GATKBaseTest;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.SVTestUtils;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.SimpleSVType;
-import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AlignedContig;
-import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AssemblyContigAlignmentsConfigPicker;
-import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AssemblyContigWithFineTunedAlignments;
-import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.StrandSwitch;
+import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.*;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.GATKSVVCFConstants;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
@@ -104,10 +101,10 @@ public final class CpxSVInferenceTestUtils extends GATKBaseTest {
         //////////
         final List<CpxVariantInducingAssemblyContig.Jump> manuallyCalculatedJumps =
                 Arrays.asList(
-                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chr2", 4452399, 4452399), new SimpleInterval("chr9", 34840477, 34840477), StrandSwitch.NO_SWITCH, 117),
-                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chr9", 34840411, 34840411), new SimpleInterval("chr6", 15853414, 15853414), StrandSwitch.NO_SWITCH, 114),
-                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chr6", 15853372, 15853372), new SimpleInterval("chr2", 4452357, 4452357), StrandSwitch.NO_SWITCH, 53),
-                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chr2", 4452298, 4452298), new SimpleInterval("chr2", 4452406, 4452406), StrandSwitch.NO_SWITCH, 317)
+                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chr2", 4452399, 4452399), new SimpleInterval("chr9", 34840477, 34840477), StrandSwitch.NO_SWITCH, 118),
+                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chr9", 34840411, 34840411), new SimpleInterval("chr6", 15853414, 15853414), StrandSwitch.NO_SWITCH, 115),
+                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chr6", 15853372, 15853372), new SimpleInterval("chr2", 4452357, 4452357), StrandSwitch.NO_SWITCH, 54),
+                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chr2", 4452298, 4452298), new SimpleInterval("chr2", 4452406, 4452406), StrandSwitch.NO_SWITCH, 318)
                 );
         final List<SimpleInterval> manuallyCalculatedEventPrimaryChromosomeSegmentingLocations =
                 Arrays.asList(
@@ -131,7 +128,7 @@ public final class CpxSVInferenceTestUtils extends GATKBaseTest {
                         new SimpleInterval("chr2", 4452357, 4452399),
                         new SimpleInterval("chr2", 4452399, 4452406));
         final List<String> manuallyCalculatedAltArrangementDescription =
-                Arrays.asList("1", "2", "3", "UINS-317", "1", "UINS-53", "chr6:15853372-15853414", "UINS-114", "chr9:34840411-34840477", "UINS-117", "3");
+                Arrays.asList("1", "2", "3", "UINS-318", "1", "UINS-54", "chr6:15853372-15853414", "UINS-115", "chr9:34840411-34840477", "UINS-118", "3");
         final byte[] manuallyCalculatedAltSeq = Arrays.copyOfRange(analysisReadyContig.getContigSequence(), 247, 1139);
         SequenceUtil.reverseComplement(manuallyCalculatedAltSeq);
         final CpxVariantCanonicalRepresentation manuallyCalculatedCpxVariantCanonicalRepresentation =
@@ -179,9 +176,9 @@ public final class CpxSVInferenceTestUtils extends GATKBaseTest {
         //////////
         final List<CpxVariantInducingAssemblyContig.Jump> manuallyCalculatedJumps =
                 Arrays.asList(
-                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chr2", 16225125, 16225125), new SimpleInterval("chr2", 16226720, 16226720), StrandSwitch.NO_SWITCH, 6),
-                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chr2", 16226497, 16226497), new SimpleInterval("chr2", 16225125, 16225125), StrandSwitch.REVERSE_TO_FORWARD, 27),
-                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chr2", 16225237, 16225237), new SimpleInterval("chr2", 16225142, 16225142), StrandSwitch.FORWARD_TO_REVERSE, 1)
+                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chr2", 16225125, 16225125), new SimpleInterval("chr2", 16226720, 16226720), StrandSwitch.NO_SWITCH, 7),
+                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chr2", 16226497, 16226497), new SimpleInterval("chr2", 16225125, 16225125), StrandSwitch.REVERSE_TO_FORWARD, 28),
+                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chr2", 16225237, 16225237), new SimpleInterval("chr2", 16225142, 16225142), StrandSwitch.FORWARD_TO_REVERSE, 2)
                 );
         final List<SimpleInterval> manuallyCalculatedEventPrimaryChromosomeSegmentingLocations =
                 Arrays.asList(
@@ -203,7 +200,7 @@ public final class CpxSVInferenceTestUtils extends GATKBaseTest {
                         new SimpleInterval("chr2", 16225125, 16225142),
                         new SimpleInterval("chr2", 16225142, 16225237));
         final List<String> manuallyCalculatedAltArrangementDescription =
-                Arrays.asList("1", "UINS-1", "-2", "-1", "UINS-27", "chr2:16226497-16226720", "UINS-6", "1", "2");
+                Arrays.asList("1", "UINS-2", "-2", "-1", "UINS-28", "chr2:16226497-16226720", "UINS-7", "1", "2");
         final byte[] manuallyCalculatedAltSeq = Arrays.copyOfRange(analysisReadyContig.getContigSequence(), 147, 652);
         SequenceUtil.reverseComplement(manuallyCalculatedAltSeq);
         final CpxVariantCanonicalRepresentation manuallyCalculatedCpxVariantCanonicalRepresentation =
@@ -250,12 +247,12 @@ public final class CpxSVInferenceTestUtils extends GATKBaseTest {
         //////////
         final List<CpxVariantInducingAssemblyContig.Jump> manuallyCalculatedJumps =
                 Arrays.asList(
-                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chrX", 30793441, 30793441), new SimpleInterval("chrX", 30793442, 30793442), StrandSwitch.NO_SWITCH, 77),
-                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chrX", 30794753, 30794753), new SimpleInterval("chrX", 30794754, 30794754), StrandSwitch.NO_SWITCH, 95),
+                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chrX", 30793441, 30793441), new SimpleInterval("chrX", 30793442, 30793442), StrandSwitch.NO_SWITCH, 78),
+                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chrX", 30794753, 30794753), new SimpleInterval("chrX", 30794754, 30794754), StrandSwitch.NO_SWITCH, 96),
                         new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chrX", 30795363, 30795363), new SimpleInterval("chrX", 30795415, 30795415), StrandSwitch.NO_SWITCH, 0),
-                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chrX", 30795543, 30795543), new SimpleInterval("chrX", 30794688, 30794688), StrandSwitch.NO_SWITCH, 228),
-                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chrX", 30794787, 30794787), new SimpleInterval("chrX", 30789491, 30789491), StrandSwitch.NO_SWITCH, 80),
-                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chrX", 30789573, 30789573), new SimpleInterval("chrX", 30796147, 30796147), StrandSwitch.NO_SWITCH, 39),
+                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chrX", 30795543, 30795543), new SimpleInterval("chrX", 30794688, 30794688), StrandSwitch.NO_SWITCH, 229),
+                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chrX", 30794787, 30794787), new SimpleInterval("chrX", 30789491, 30789491), StrandSwitch.NO_SWITCH, 81),
+                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chrX", 30789573, 30789573), new SimpleInterval("chrX", 30796147, 30796147), StrandSwitch.NO_SWITCH, 40),
                         new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chrX", 30796247, 30796247), new SimpleInterval("chrX", 30795360, 30795360), StrandSwitch.NO_SWITCH, 0)
                 );
         final List<SimpleInterval> manuallyCalculatedEventPrimaryChromosomeSegmentingLocations =
@@ -294,7 +291,7 @@ public final class CpxSVInferenceTestUtils extends GATKBaseTest {
                         new SimpleInterval("chrX", 30795543, 30796147),
                         new SimpleInterval("chrX", 30796147, 30796247));
         final List<String> manuallyCalculatedAltArrangementDescription =
-                Arrays.asList("UINS-77", "1", "2", "UINS-95", "3", "4", "5", "7", "UINS-228", "2", "3", "UINS-80", "chrX:30789491-30789573", "UINS-39", "9", "5", "6", "7", "8", "9");
+                Arrays.asList("UINS-78", "1", "2", "UINS-96", "3", "4", "5", "7", "UINS-229", "2", "3", "UINS-81", "chrX:30789491-30789573", "UINS-40", "9", "5", "6", "7", "8", "9");
         final byte[] manuallyCalculatedAltSeq = Arrays.copyOfRange(analysisReadyContig.getContigSequence(), 790, 4538);
         final CpxVariantCanonicalRepresentation manuallyCalculatedCpxVariantCanonicalRepresentation =
                 new CpxVariantCanonicalRepresentation(
@@ -333,12 +330,21 @@ public final class CpxSVInferenceTestUtils extends GATKBaseTest {
                                                                                  final SAMSequenceDictionary refSeqDict) {
         final AlignedContig alignedContig =
                 SVTestUtils.fromPrimarySAMRecordString(primarySAMRecord, true);
-        final AssemblyContigWithFineTunedAlignments toBeDeOverlapped =
+        final AssemblyContigWithFineTunedAlignments intermediate =
                 AssemblyContigAlignmentsConfigPicker.reConstructContigFromPickedConfiguration(
                         new Tuple2<>(new Tuple2<>(alignedContig.getContigName(), alignedContig.getContigSequence()),
                                 AssemblyContigAlignmentsConfigPicker.pickBestConfigurations(alignedContig, canonicalChromosomes,
                                                                             0.0)))
                         .next();
-        return CpxVariantInterpreter.furtherPreprocess(toBeDeOverlapped, refSeqDict);
+
+        final AssemblyContigAlignmentsConfigPicker.GoodAndBadMappings goodAndBadMappings =
+                AssemblyContigAlignmentSignatureClassifier.removeNonUniqueMappings(
+                        intermediate.getAlignments(),
+                        AssemblyContigAlignmentSignatureClassifier.ALIGNMENT_MAPQUAL_THREHOLD,
+                        AssemblyContigAlignmentSignatureClassifier.ALIGNMENT_READSPAN_THRESHOLD);
+        final AssemblyContigWithFineTunedAlignments result = new AssemblyContigWithFineTunedAlignments(
+                new AlignedContig(intermediate.getContigName(), intermediate.getContigSequence(), goodAndBadMappings.getGoodMappings()),
+                goodAndBadMappings.getBadMappingsAsCompactStrings(), false, (AlignmentInterval) null);
+        return CpxVariantInterpreter.furtherPreprocess(result, refSeqDict);
     }
 }

@@ -429,7 +429,7 @@ final class CpxVariantInducingAssemblyContig {
                 default: throw new NoSuchElementException("seeing a strand switch that doesn't make sense");
             }
 
-            gapSize = Math.max(0, two.startInAssembledContig - one.endInAssembledContig - 2); // -2 because we want bases in-between
+            gapSize = Math.max(0, two.startInAssembledContig - one.endInAssembledContig - 1); // -1 because we want bases in-between
         }
 
         boolean isGapped() {
