@@ -14,6 +14,8 @@ import org.broadinstitute.hellbender.engine.filters.ReadFilter;
 import org.broadinstitute.hellbender.engine.filters.ReadFilterLibrary;
 import org.broadinstitute.hellbender.engine.filters.WellformedReadFilter;
 import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.tools.walkers.annotator.Annotation;
+import org.broadinstitute.hellbender.tools.walkers.annotator.StandardMutectAnnotation;
 import org.broadinstitute.hellbender.tools.walkers.annotator.VariantAnnotatorEngine;
 import org.broadinstitute.hellbender.tools.walkers.genotyper.GenotypingGivenAllelesUtils;
 import org.broadinstitute.hellbender.tools.walkers.genotyper.GenotypingOutputMode;
@@ -98,7 +100,7 @@ public final class Mutect2Engine implements AssemblyRegionEvaluator {
      * @param header header for the reads
      * @param reference path to the reference
      */
-    public Mutect2Engine(final M2ArgumentCollection MTAC, final boolean createBamOutIndex, final boolean createBamOutMD5, final SAMFileHeader header, final String reference ) {
+    public Mutect2Engine(final M2ArgumentCollection MTAC, final boolean createBamOutIndex, final boolean createBamOutMD5, final SAMFileHeader header, final String reference, final VariantAnnotatorEngine annotatorEngine) {
         this.MTAC = Utils.nonNull(MTAC);
         this.header = Utils.nonNull(header);
         Utils.nonNull(reference);
@@ -110,6 +112,7 @@ public final class Mutect2Engine implements AssemblyRegionEvaluator {
                 MTAC.tumorSampleName : IOUtils.urlDecode(MTAC.tumorSampleName);
         normalSampleName = MTAC.normalSampleName == null || samplesList.asListOfSamples().contains(MTAC.normalSampleName) ?
                 MTAC.normalSampleName : IOUtils.urlDecode(MTAC.normalSampleName);
+        annotationEngine = annotatorEngine;
         initialize(createBamOutIndex, createBamOutMD5);
     }
 
@@ -121,8 +124,6 @@ public final class Mutect2Engine implements AssemblyRegionEvaluator {
             throw new UserException.BadInput("BAM header sample names " + samplesList.asListOfSamples() + "does not contain given normal" +
                     " sample name " + normalSampleName);
         }
-
-        annotationEngine = VariantAnnotatorEngine.ofSelectedMinusExcluded(MTAC.defaultGATKVariantAnnotationArgumentCollection, null, Collections.emptyList(), false);
 
         assemblyEngine = AssemblyBasedCallerUtils.createReadThreadingAssembler(MTAC);
         likelihoodCalculationEngine = AssemblyBasedCallerUtils.createLikelihoodCalculationEngine(MTAC.likelihoodArgs);
@@ -157,6 +158,13 @@ public final class Mutect2Engine implements AssemblyRegionEvaluator {
         filters.add(new WellformedReadFilter());
 
         return filters;
+    }
+
+    /**
+     * @return the default set of read filters for use with Mutect2
+     */
+    public static List<Class<? extends Annotation>> getStandardMutect2AnnotationGroups() {
+        return Collections.singletonList(StandardMutectAnnotation.class);
     }
 
     public void writeHeader(final VariantContextWriter vcfWriter, final SAMSequenceDictionary sequenceDictionary,

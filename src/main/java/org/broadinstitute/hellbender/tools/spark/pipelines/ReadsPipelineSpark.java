@@ -142,6 +142,9 @@ public class ReadsPipelineSpark extends GATKSparkTool {
     }
 
     @Override
+    public boolean useAnnotationArguments() { return true;}
+
+    @Override
     protected void runTool(final JavaSparkContext ctx) {
         if (joinStrategy == JoinStrategy.BROADCAST && ! getReference().isCompatibleWithSparkBroadcast()){
             throw new UserException.Require2BitReferenceForBroadcast();
@@ -202,7 +205,7 @@ public class ReadsPipelineSpark extends GATKSparkTool {
         final JavaRDD<GATKRead> filteredReadsForHC = finalReads.filter(read -> hcReadFilter.test(read));
         filteredReadsForHC.persist(StorageLevel.DISK_ONLY()); // without caching, computations are run twice as a side effect of finding partition boundaries for sorting
         final List<SimpleInterval> intervals = hasIntervals() ? getIntervals() : IntervalUtils.getAllIntervalsForReference(header.getSequenceDictionary());
-        HaplotypeCallerSpark.callVariantsWithHaplotypeCallerAndWriteOutput(ctx, filteredReadsForHC, header, getReference(), intervals, hcArgs, shardingArgs, numReducers, output);
+        HaplotypeCallerSpark.callVariantsWithHaplotypeCallerAndWriteOutput(ctx, filteredReadsForHC, header, getReference(), intervals, hcArgs, shardingArgs, numReducers, output, getDefaultAnnotations());
 
         if (bwaEngine != null) {
             bwaEngine.close();
