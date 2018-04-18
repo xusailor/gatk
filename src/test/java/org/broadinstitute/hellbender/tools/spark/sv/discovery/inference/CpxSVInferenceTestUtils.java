@@ -44,14 +44,18 @@ public final class CpxSVInferenceTestUtils extends GATKBaseTest {
         final VariantContext expectedVariantContext;
         final byte[] assumedReferenceSequence; // reference sequence used in constructed the expected results that can be used in real tests
 
-        private PreprocessedAndAnalysisReadyContigWithExpectedResults(final CpxVariantInducingAssemblyContig expectedCpxVariantInducingAssemblyContig,
-                                                                      final CpxVariantCanonicalRepresentation expectedCpxVariantCanonicalRepresentation,
-                                                                      final VariantContext expectedVariantContext,
-                                                                      final byte[] assumedReferenceSequence) {
+        final Set<SimpleInterval> expectedTwoBaseBoundaries;
+
+        PreprocessedAndAnalysisReadyContigWithExpectedResults(final CpxVariantInducingAssemblyContig expectedCpxVariantInducingAssemblyContig,
+                                                              final CpxVariantCanonicalRepresentation expectedCpxVariantCanonicalRepresentation,
+                                                              final VariantContext expectedVariantContext,
+                                                              final byte[] assumedReferenceSequence,
+                                                              final Set<SimpleInterval> expectedTwoBaseBoundaries) {
             this.expectedCpxVariantInducingAssemblyContig = expectedCpxVariantInducingAssemblyContig;
             this.expectedCpxVariantCanonicalRepresentation = expectedCpxVariantCanonicalRepresentation;
             this.expectedVariantContext = expectedVariantContext;
             this.assumedReferenceSequence = assumedReferenceSequence;
+            this.expectedTwoBaseBoundaries = expectedTwoBaseBoundaries;
         }
     }
 
@@ -84,6 +88,7 @@ public final class CpxSVInferenceTestUtils extends GATKBaseTest {
         PREPROCESSED_AND_ANALYSIS_READY_CONTIGS_AND_EXPECTED_RESULTS.add(buildForContig_2428_0(hg38CanonicalChromosomes, bareBoneHg38SAMSeqDict));
         PREPROCESSED_AND_ANALYSIS_READY_CONTIGS_AND_EXPECTED_RESULTS.add(buildForContig_2548_1(hg38CanonicalChromosomes, bareBoneHg38SAMSeqDict));
         PREPROCESSED_AND_ANALYSIS_READY_CONTIGS_AND_EXPECTED_RESULTS.add(buildForContig_30077_1(hg38CanonicalChromosomes, bareBoneHg38SAMSeqDict));
+        PREPROCESSED_AND_ANALYSIS_READY_CONTIGS_AND_EXPECTED_RESULTS.add(buildForContig_22672_4(hg38CanonicalChromosomes, bareBoneHg38SAMSeqDict));
     }
 
     // =================================================================================================================
@@ -155,11 +160,21 @@ public final class CpxSVInferenceTestUtils extends GATKBaseTest {
         final VariantContext manuallyCalculatedVariantContext = variantContextBuilder.make();
 
         //////////
+        final Set<SimpleInterval> manuallyCalculatedTwoBaseBoundaries = new HashSet<>();
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chr2", 4452399, 4452400));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chr2", 4452640, 4452641));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chr2", 4452298, 4452299));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chr2", 4452356, 4452357));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chr2", 4450935, 4450936));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chr2", 4452405, 4452406));
+
+        //////////
         return new PreprocessedAndAnalysisReadyContigWithExpectedResults(
                 manuallyCalculatedCpxVariantInducingAssemblyContig,
                 manuallyCalculatedCpxVariantCanonicalRepresentation,
                 manuallyCalculatedVariantContext,
-                dummyRefSequence);
+                dummyRefSequence,
+                manuallyCalculatedTwoBaseBoundaries);
     }
 
 
@@ -227,11 +242,20 @@ public final class CpxSVInferenceTestUtils extends GATKBaseTest {
         final VariantContext manuallyCalculatedVariantContext = variantContextBuilder.make();
 
         //////////
+        final Set<SimpleInterval> manuallyCalculatedTwoBaseBoundaries = new HashSet<>();
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chr2", 16225125, 16225126));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chr2", 16225383, 16225384));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chr2", 16225236, 16225237));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chr2", 16224630, 16224631));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chr2", 16225141, 16225142));
+
+        //////////
         return new PreprocessedAndAnalysisReadyContigWithExpectedResults(
                 manuallyCalculatedCpxVariantInducingAssemblyContig,
                 manuallyCalculatedCpxVariantCanonicalRepresentation,
                 manuallyCalculatedVariantContext,
-                dummyRefSequence);
+                dummyRefSequence,
+                manuallyCalculatedTwoBaseBoundaries);
     }
 
     private static PreprocessedAndAnalysisReadyContigWithExpectedResults buildForContig_30077_1(final Set<String> canonicalChromosomes,
@@ -317,13 +341,117 @@ public final class CpxSVInferenceTestUtils extends GATKBaseTest {
         final VariantContext manuallyCalculatedVariantContext = variantContextBuilder.make();
 
         //////////
+        final Set<SimpleInterval> manuallyCalculatedTwoBaseBoundaries = new HashSet<>();
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chrX", 30792651, 30792652));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chrX", 30793440, 30793441));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chrX", 30793442, 30793443));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chrX", 30794752, 30794753));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chrX", 30794754, 30794755));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chrX", 30795362, 30795363));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chrX", 30795415, 30795416));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chrX", 30795542, 30795543));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chrX", 30794688, 30794689));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chrX", 30794786, 30794787));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chrX", 30796147, 30796148));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chrX", 30796246, 30796247));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chrX", 30795360, 30795361));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chrX", 30796526, 30796527));
+
+        //////////
         return new PreprocessedAndAnalysisReadyContigWithExpectedResults(
                 manuallyCalculatedCpxVariantInducingAssemblyContig,
                 manuallyCalculatedCpxVariantCanonicalRepresentation,
                 manuallyCalculatedVariantContext,
-                dummyRefSequence);
+                dummyRefSequence,
+                manuallyCalculatedTwoBaseBoundaries);
     }
 
+    private static PreprocessedAndAnalysisReadyContigWithExpectedResults buildForContig_22672_4(final Set<String> canonicalChromosomes,
+                                                                                                final SAMSequenceDictionary refSeqDict) {
+        final AssemblyContigWithFineTunedAlignments
+                analysisReadyContig = makeContigAnalysisReady("asm022672:tig00004\t16\tchr9\t130954964\t60\t1631S192M60I99M24I54M156I1430M\t*\t0\t0\tTCATCCAGGTTGGAGTGCAGTGGTGCTATCTCAGCTCACTGCAGCCTCCACCCCTGGATTGAATCGATTCTCCTGCCTCAGCCTCCTGAGTAGCTGGGATTACAGGAGTGCACCACCACGCCCGGCTCATGTTTGTGTTTTTAGTAGAGACAGGGTTTCACCACATTGGCCAGGCTGGTCTCAAACTCCTGACCTCAAGTGATCTGGCTGCCTTGGCCTCCCAAAGTGCTGGGATTATAGGTGTGAGCCACCACACCCAGCCAGAGTGGGTAGTTTTTAAAACCACCACAATTGCCCGCCAGGGGCACAAAGAGGACTCATGGGGATGGGTCTGATAAGTGCTGAGCCCAGTGCTGGGCACCTGCAGGCACTCAGTAGGTGGTGGACACTTGTTTTATTATGATTATCCAGCACCTAGCACCCAGTCTACCCCAAATAGCACCATCAACATATCTTCCTGAATCCTGCCTCCCTCATTTCAGCCTTTGCTCTCAGGCAGCCAGGGGTTCCCCATTTTCAACAAGAAAAAGCCCAAACCCTTTTGCTTGGCAGTCAACCCCACCCCATCCAAACCAATCCCTCCTTTCTCTGCTGAATGTTTCCCCTGTGCCAGCCACTTCCTTCCCACCACCACACCCTTAGCCAGGCTATCACCCACCAAGAATCCTGCCCCATCTTGAGCCTCTGCCTTCATTTGAAGCCTATCATCCCCTGTGCCTCAGTATTTTCCTTCAGCTCTAGATTCTTGCAGTGCTCTAGCCATTTACACAGCCATCAAATTCCAGGCCTCTTCTGTCACTCACCGGTTCACCTCTGTCATCTTGTCTCCTGCCCAAGACTGCATCTCCTCTTGTCCCTTCTCTGAGAGGCCTGTGGTTGAGCACAGGGATGAATGAGAAAGAAACCCAGCCTGTCCTCAAGAAGTTGACAATGTGTCCCTCAAAGACTGGGCTCATTGCTGCTACCTCTGGGAGTCCCAATGTGGAGGAGAGCTCTCAGTGGGTGTGCAGAAAATCTTGTCAGAAGTTACTGTCCCTGGGCAGGGCTAATACCACCAGTATCACCATTATCATCATCACCACTATCGTCATCATCACCACCATCACCATCATTACCACCATCATCACCATCAATATCGACACCATCCTCATCATCATCATCACCACCATCATCAGCATCATCATCAGCAGCAGCACCACCATTACCATCATTATCCCTACCATCTTCATCACCACCATCACCATCACCATCACCATCATCATCACCACCATCACCATCATCACCACCACCATCATCATCACCACCATCACCACCATCATCACCATCATCATCACCATCATCACCACCATCATCACCATCATCATCATCAGCACCACCACCACTATTACCATCATTATCACTACCATCCTCATCACCACCATCACTATCACCATCACCATCATCATCACCATCATCACCATCATCATCACCATCACCATCATCACCATCACCATCACCATCATCACCATCATCATCATCACCATCACCATCATCATCACCATCATCACCACCATCATCACCATCATCATCATCAGCACCACCACCACTATTACCATCATTATCCCTACCATCTTCATCACCACCATCACCATCACCATCACCATCATCATCACCACCATCACCATCACCATCACCATCATCATCACCATCATCACCACCATCATCACCATCATCATCATCAGCACCACCACCACTATTACCATCATTATCCCTACCATCCTCATCACCACCATCACCATCACCATCACCATCATCATCACCATCACCATCATCACCATCACCATCATCAACATCACCATCACCATCATCACCATCATCATCATCACCATCACCATCATCATCACCATCATCACCACCATCATCACCATCATCAGCAGCAGCAGCACCACCACCACTATTACCATCATTATCCCTACCATCCTCATCACCACCATCACCATCACCATCATCACCATCACCATCACCATCATCACCATCACCATCATCATCATCACCACCATCATCACCATCATCATCAGCAGCAGCACCACCACCACTATTACCATCATTATTCCTACCATCCTCATCACCACCCTCACCATCACCATCATCATCATGACCATCATCATCAGCACCACCGTTATCATCATTATCCCCACCGTCCTCATCACCATCATCACCATCACCATCATCATTGTCACCATCACCATGATCATCGTCACCATCTTTATCCCCACCATCCTCATCACCATCATCACTACCATCAGCACCATCACCATCATCACCATTACCACCATTATCACCACCATCATCATCACCAACACCATCCTCAGCACTACCACCACCATCACATTCTCATTCATCCCTGTGCTCAACCACAGGCCTCTCAGAGAAGGGACAAGAGGAGATGCAGTCTTGGGCAGGAGACCACTTTTGGGGGCAAAAGCAGCTCCTGAAACCACACCCCAAAGCAGGCTCCACTCCATTCCATCAGACCCTGCAGTCAGGAAGGGCCGTGGGGTGTCCTGGCCTTCATCTGTGAGAACTGCCTTACCCATGCTGATTTCCACCCACATGGCATCAGAGGACTCCGTGCCCTGACACTACAATCCTTGTCCCCTTGTGTAGCCACCTCAGGGTCCAGCACCAACTGTCCTGTCTACCTGGAGCATAACACCATGAGGTCCCCAGCTCCTGGCTCTCCCCTGGGGGCTTGCCATGACCCGTTGGCCTGAGCTTTGGGGTGTCAGAAGCCCCCATGGAATGCACTGCTAAGACAAGCCCATCCTGCCAGCCTTCCTACCTCTCATAGCTGACCCTGCTGGGTTCTATGTTACAAATTCCCCTGCCCCAGCACCACTCTGTGACCTGCAGTGAGCGCAGCTGTCACTCCCCTCAAGGGTGCCCAGGCAATAGGGAGATGTGAGGACTGTGGGGGCATAAGAGTTGTCTCAGGGCTGTGCAGAGGAAGCCAGGGCCCCCCTAAATATCTCCAGCTCATCGCACCAGCTCCATTCTGCCCGGAGCCCCATGTCTGAGCCCTCAGCTCAGAGCAGACAACCGTGCTAATCCTGTCCCAGGCTGGTGGCCGCCCCCACTGAGGAGGGGGAGCAAGCTGCCCAGAAAGCTGGTGTGGAGTGCCCGTTAGCTGTGGATGGCATCGTGGTGCCACCGGGAGATTATCCACACGCAGCTAGTTCCCAGCAGCCGACCCCAGTGCCCCAAAAGAAGGCAGCTAGCTATTAAGGAGATTCATGGGCAGGGGTGAGGCGAGGAGGAAGGCTAATCAAGCTGTCCTGATTGTAATTGTCCGAAGGTGCTGGCCTCTCTCGTAAACATGCCAACTGCAGGCCCTGCTTCTGCGTCTCAGCAGGACTTCTCCCTGCTGGGACCGTGCTGGGGAATGTTCTTTCAACATAACTCTATTTAAATTCACATTTCCATCATCCCCCAGAGGAGCCGAGAGAGCTGAGCTGCGTGGTATAAGCCGGGAAAGGATTAGATGGGGTGGGTGTTATTTTTTTTCCTTTTATTTTCCCTTAGTGATGGAGATGGGGTTGTGGGGGGTGGGCCATTCTAGAATTCTGCAGTATTGGAACTGGAAGAGCTGTTACAAACCATCCAGCTC\t*\tSA:Z:chr9,130953867,-,1274M42I167M2163H,60,55,1318;chr9,130955093,-,1469H33M3I179M1962H,19,14,138;\tMD:Z:15T1C5T11A0T3G0A2C4C3T8T5C5T2G8G5G2G6C24T45T2C23T5C14T46T33T5C32T1433\tRG:Z:GATKSVContigAlignments\tNM:i:268\tAS:i:1347\tXS:i:176",
+                canonicalChromosomes, refSeqDict);
+
+        final CpxVariantInducingAssemblyContig.BasicInfo manuallyCalculatedBasicInfo =
+                new CpxVariantInducingAssemblyContig.BasicInfo("chr9", false,
+                        new SimpleInterval("chr9", 130953867, 130953867), new SimpleInterval("chr9", 130956738, 130956738));
+
+        //////////
+        final List<CpxVariantInducingAssemblyContig.Jump> manuallyCalculatedJumps =
+                Arrays.asList(
+                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chr9", 130955309, 130955309), new SimpleInterval("chr9", 130955308, 130955308), StrandSwitch.NO_SWITCH, 156),
+                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chr9", 130955156, 130955156), new SimpleInterval("chr9", 130955155, 130955155), StrandSwitch.NO_SWITCH, 60),
+                        new CpxVariantInducingAssemblyContig.Jump(new SimpleInterval("chr9", 130954964, 130954964), new SimpleInterval("chr9", 130955307, 130955307), StrandSwitch.NO_SWITCH, 148)
+                );
+        final List<SimpleInterval> manuallyCalculatedEventPrimaryChromosomeSegmentingLocations =
+                Arrays.asList(
+                        new SimpleInterval("chr9", 130954964, 130954964),
+                        new SimpleInterval("chr9", 130955155, 130955155),
+                        new SimpleInterval("chr9", 130955156, 130955156),
+                        new SimpleInterval("chr9", 130955307, 130955307),
+                        new SimpleInterval("chr9", 130955308, 130955308),
+                        new SimpleInterval("chr9", 130955309, 130955309)
+                );
+        final CpxVariantInducingAssemblyContig manuallyCalculatedCpxVariantInducingAssemblyContig =
+                new CpxVariantInducingAssemblyContig(analysisReadyContig,
+                        manuallyCalculatedBasicInfo,
+                        manuallyCalculatedJumps,
+                        manuallyCalculatedEventPrimaryChromosomeSegmentingLocations);
+
+        //////////
+        final SimpleInterval manuallyCalculatedAffectedRefRegion =
+                new SimpleInterval("chr9", 130954964, 130955309);
+        final List<SimpleInterval> manuallyCalculatedSegments =
+                Arrays.asList(
+                        new SimpleInterval("chr9", 130954964, 130955155),
+                        new SimpleInterval("chr9", 130955156, 130955307),
+                        new SimpleInterval("chr9", 130955307, 130955308));
+        final List<String> manuallyCalculatedAltArrangementDescription =
+                Arrays.asList("1", "2", "UINS-148", "1", "UINS-60", "2", "3", "UINS-156");
+        final byte[] manuallyCalculatedAltSeq = Arrays.copyOfRange(analysisReadyContig.getContigSequence(), 1429, 2549);
+        SequenceUtil.reverseComplement(manuallyCalculatedAltSeq);
+        final CpxVariantCanonicalRepresentation manuallyCalculatedCpxVariantCanonicalRepresentation =
+                new CpxVariantCanonicalRepresentation(
+                        manuallyCalculatedAffectedRefRegion,
+                        manuallyCalculatedSegments,
+                        manuallyCalculatedAltArrangementDescription,
+                        manuallyCalculatedAltSeq);
+
+        //////////
+        final byte[] dummyRefSequence = "TCGA".getBytes();
+        final VariantContextBuilder variantContextBuilder = new VariantContextBuilder()
+                .chr("chr9").start(130954964).stop(130955309)
+                .alleles(Arrays.asList(Allele.create(dummyRefSequence, true), Allele.create(SimpleSVType.createBracketedSymbAlleleString(CPX_SV_SYB_ALT_ALLELE_STR), false)))
+                .id("CPX_chr9:130954964-130955309")
+                .attribute(VCFConstants.END_KEY, 130955309)
+                .attribute(SVTYPE, GATKSVVCFConstants.CPX_SV_SYB_ALT_ALLELE_STR)
+                .attribute(SVLEN, 346)
+                .attribute(SEQ_ALT_HAPLOTYPE, new String(manuallyCalculatedAltSeq));
+        variantContextBuilder.attribute(CPX_EVENT_ALT_ARRANGEMENTS,
+                String.join(VCFConstants.INFO_FIELD_ARRAY_SEPARATOR, manuallyCalculatedAltArrangementDescription));
+        variantContextBuilder.attribute(CPX_SV_REF_SEGMENTS,
+                String.join(VCFConstants.INFO_FIELD_ARRAY_SEPARATOR, manuallyCalculatedSegments.stream().map(SimpleInterval::toString).collect(Collectors.toList())));
+        final VariantContext manuallyCalculatedVariantContext = variantContextBuilder.make();
+
+        //////////
+        final Set<SimpleInterval> manuallyCalculatedTwoBaseBoundaries = new HashSet<>();
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chr9", 130955309, 130955310));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chr9", 130956737, 130956738));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chr9", 130955156, 130955157));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chr9", 130955307, 130955308));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chr9", 130954964, 130954965));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chr9", 130955154, 130955155));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chr9", 130953867, 130953868));
+        manuallyCalculatedTwoBaseBoundaries.add(new SimpleInterval("chr9", 130955306, 130955307));
+
+        //////////
+        return new PreprocessedAndAnalysisReadyContigWithExpectedResults(
+                manuallyCalculatedCpxVariantInducingAssemblyContig,
+                manuallyCalculatedCpxVariantCanonicalRepresentation,
+                manuallyCalculatedVariantContext,
+                dummyRefSequence,
+                manuallyCalculatedTwoBaseBoundaries);
+    }
 
     private static AssemblyContigWithFineTunedAlignments makeContigAnalysisReady(final String primarySAMRecord,
                                                                                  final Set<String> canonicalChromosomes,
