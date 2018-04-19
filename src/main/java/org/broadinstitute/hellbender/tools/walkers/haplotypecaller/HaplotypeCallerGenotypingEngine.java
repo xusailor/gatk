@@ -123,7 +123,7 @@ public class HaplotypeCallerGenotypingEngine extends AssemblyBasedCallerGenotypi
                 continue;
             }
             final List<VariantContext> eventsAtThisLoc = getVCsAtThisLocation(haplotypes, loc, activeAllelesToGenotype);
-            VariantContext mergedVC = AssemblyBasedCallerUtils.makeMergedVariantContext(eventsAtThisLoc);
+            VariantContext mergedVC = AssemblyBasedCallerUtils.makeMergedVariantContext(eventsAtThisLoc, new SimpleInterval(refLoc.getContig(), loc, loc));
             if( mergedVC == null ) {
                 continue;
             }

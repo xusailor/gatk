@@ -16,6 +16,7 @@ import org.broadinstitute.hellbender.utils.read.AlignmentUtils;
 
 import java.io.Serializable;
 import java.util.*;
+import java.util.stream.Stream;
 
 /**
  * Extract simple VariantContext events from a single haplotype
@@ -363,6 +364,10 @@ public final class EventMap extends TreeMap<Integer, VariantContext> {
         }
 
         return startPosKeySet;
+    }
+
+    public Iterator<VariantContext> getSpanningEvents(final int loc) {
+        return headMap(loc, true).values().stream().filter(v -> v.getEnd() >= loc).iterator();
     }
 
     private static class VariantContextComparator implements Comparator<VariantContext>, Serializable {

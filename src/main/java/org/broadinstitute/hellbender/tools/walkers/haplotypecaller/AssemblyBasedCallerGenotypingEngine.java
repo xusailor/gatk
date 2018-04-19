@@ -2,6 +2,7 @@ package org.broadinstitute.hellbender.tools.walkers.haplotypecaller;
 
 import htsjdk.variant.variantcontext.*;
 import org.apache.commons.lang3.tuple.Pair;
+import org.apache.hadoop.io.Text;
 import org.broadinstitute.hellbender.tools.walkers.genotyper.*;
 import org.broadinstitute.hellbender.tools.walkers.genotyper.afcalc.AFCalculatorProvider;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
@@ -105,24 +106,58 @@ public abstract class AssemblyBasedCallerGenotypingEngine extends GenotypingEngi
         return startPosKeySet;
     }
 
+
+    protected static class LocationAndAlleles {
+        private final int loc;
+        private final List<Allele> alleles;
+
+        public LocationAndAlleles(final int loc, final List<Allele> alleles) {
+            this.loc = loc;
+            this.alleles = alleles;
+        }
+
+        public int getLoc() {
+            return loc;
+        }
+
+        public List<Allele> getAlleles() {
+            return alleles;
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            final LocationAndAlleles that = (LocationAndAlleles) o;
+
+            if (loc != that.loc) return false;
+            return alleles != null ? alleles.equals(that.alleles) : that.alleles == null;
+        }
+
+        @Override
+        public int hashCode() {
+            int result = loc;
+            result = 31 * result + (alleles != null ? alleles.hashCode() : 0);
+            return result;
+        }
+
+    }
+
     protected static List<VariantContext> getVCsAtThisLocation(final List<Haplotype> haplotypes,
                                                                final int loc,
                                                                final List<VariantContext> activeAllelesToGenotype) {
         // the overlapping events to merge into a common reference view
-        final List<VariantContext> eventsAtThisLoc = new ArrayList<>();
+
+        final SortedMap<LocationAndAlleles, VariantContext> overlappingVCsByLocationAndAlleles = new TreeMap<>(Comparator.comparing(LocationAndAlleles::getLoc));
 
         if( activeAllelesToGenotype.isEmpty() ) {
-            final List<VariantContext> events = haplotypes.stream().map(h -> h.getEventMap().get(loc))
-                    .filter(Objects::nonNull).collect(Collectors.toList());
-            for (final VariantContext vc : events) {
-                if (eventsAtThisLoc.stream().noneMatch(vc::hasSameAllelesAs)) {
-                    eventsAtThisLoc.add(vc);
-                }
-            }
+            haplotypes.stream().flatMap(h -> Utils.stream(h.getEventMap().getSpanningEvents(loc)))
+                    .filter(Objects::nonNull).forEach(v -> overlappingVCsByLocationAndAlleles.put(new LocationAndAlleles(v.getStart(), v.getAlleles()), v));
         } else { // we are in GGA mode!
             int compCount = 0;
             for( final VariantContext compVC : activeAllelesToGenotype ) {
-                if( compVC.getStart() == loc ) {
+                if( compVC.getStart() <= loc && compVC.getEnd() >= loc) {
                     int alleleCount = 0;
                     for( final Allele compAltAllele : compVC.getAlternateAlleles() ) {
                         final List<Allele> alleleSet = Arrays.asList(compVC.getReference(), compAltAllele);
@@ -132,9 +167,7 @@ public abstract class AssemblyBasedCallerGenotypingEngine extends GenotypingEngi
                         final String vcSourceName = "Comp" + compCount + "Allele" + alleleCount;
                         // check if this event is already in the list of events due to a repeat in the input alleles track
                         final VariantContext candidateEventToAdd = new VariantContextBuilder(compVC).alleles(alleleSet).source(vcSourceName).make();
-                        if (eventsAtThisLoc.stream().noneMatch(candidateEventToAdd::hasSameAllelesAs))  {
-                            eventsAtThisLoc.add(candidateEventToAdd);
-                        }
+                        overlappingVCsByLocationAndAlleles.put(new LocationAndAlleles(candidateEventToAdd.getStart(), candidateEventToAdd.getAlleles()), candidateEventToAdd);
                         alleleCount++;
                     }
                 }
@@ -142,7 +175,7 @@ public abstract class AssemblyBasedCallerGenotypingEngine extends GenotypingEngi
             }
         }
 
-        return eventsAtThisLoc;
+        return new ArrayList<>(overlappingVCsByLocationAndAlleles.values());
     }
 
     protected static Map<Allele, List<Haplotype>> createAlleleMapper(final List<VariantContext> eventsAtThisLoc,
