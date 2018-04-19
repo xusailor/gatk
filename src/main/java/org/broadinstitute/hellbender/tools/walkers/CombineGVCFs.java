@@ -157,8 +157,14 @@ public final class CombineGVCFs extends MultiVariantWalkerGroupedOnStart {
 
         // Break up the GVCF according to the provided reference blocking scheme
         if ( multipleAtWhichToBreakBands > 0) {
-            for (int i = ((intervalToClose.getStart())/multipleAtWhichToBreakBands)*multipleAtWhichToBreakBands; i <= intervalToClose.getEnd(); i+=multipleAtWhichToBreakBands) {
-                sitesToStop.add(i-1); // Subtract 1 here because we want to split before this base
+            // if the intermediate interval to close starts before the end of the first interval,
+            // create the first stop position at the end of the band multiple
+            for (int blockEndPosition = intervalToClose.getStart() < multipleAtWhichToBreakBands ?
+                         multipleAtWhichToBreakBands :
+                         (intervalToClose.getStart() / multipleAtWhichToBreakBands) * multipleAtWhichToBreakBands;
+                 blockEndPosition <= intervalToClose.getEnd();
+                 blockEndPosition += multipleAtWhichToBreakBands) {
+                sitesToStop.add(blockEndPosition - 1); // Subtract 1 here because we want to split before this base
             }
         }
 
